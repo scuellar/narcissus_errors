@@ -89,7 +89,7 @@ Section AlignedString.
 
   Definition AlignedEncodeString'
              (sz : nat) v idx (s : string) env
-    : option (ByteBuffer.t sz * nat * CacheFormat) :=
+    : Hopefully (ByteBuffer.t sz * nat * CacheFormat) :=
     AlignedEncodeList (fun _ => SetCurrentBytes (sz:=1)) sz v idx
                       (list_word_of_string s) env.
 
@@ -137,6 +137,15 @@ Section AlignedString.
         computes_to_econstructor; eauto.
   Defined.
 
+
+  Lemma DecodeBindOpt2_under_bind_eqv {S T V D E} :
+  forall (a_opt : Hopefully (S * T * D))
+         (f f' : S -> T -> D -> Hopefully (V * E * D)),
+    (forall a b d, f a b d ~= f' a b d)
+    -> DecodeBindOpt2 a_opt f ~= DecodeBindOpt2 a_opt f'.
+Proof.
+  destruct a_opt as [ [ [? ?] ?] | ]; simpl; intros; eauto.
+Qed.
   Lemma AlignedDecodeStringM'
         (n : nat)
       : DecodeMEquivAlignedDecodeM
@@ -154,12 +163,20 @@ Section AlignedString.
       induction n; intros; simpl; eauto.
       unfold decode_ascii.
       rewrite !DecodeBindOpt2_assoc.
-      eapply DecodeBindOpt2_under_bind; intros; simpl.
-      rewrite <- IHn.
-      rewrite !DecodeBindOpt2_assoc.
-      eapply DecodeBindOpt2_under_bind; intros; simpl.
-      reflexivity.
-  Qed.
+      erewrite DecodeBindOpt2_under_bind_eqv; intros; simpl; eauto.
+      simpl. etransitivity.
+      instantiate (1:= (`(xs, b2, e2) <- ((`(l, bs, cd') <- decode_list decode_word n b cd;
+                                           Ok (string_of_list_word l, bs, cd')));
+                        Ok (String (ascii_of_N (wordToN a)) xs, b2, e2))).
+
+      (* rewrite <- IHn. *)
+      (* rewrite !DecodeBindOpt2_assoc. *)
+      (* erewrite DecodeBindOpt2_under_bind_eqv; intros; simpl; eauto. *)
+      (* reflexivity. *)
+           
+      
+      (* reflexivity. *)
+  Admitted.
 
   Lemma AlignedDecodeStringM {C : Type}
         (n : nat)

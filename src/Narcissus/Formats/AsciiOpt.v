@@ -25,9 +25,9 @@ Section Ascii.
     : B * CacheFormat :=
     encode_word (NToWord 8 (N_of_ascii c)) ce.
 
-  Definition decode_ascii (b : B) (cd : CacheDecode) : option (ascii * B * CacheDecode) :=
+  Definition decode_ascii (b : B) (cd : CacheDecode) : Hopefully (ascii * B * CacheDecode) :=
     `(n, b, cd) <- decode_word (sz:=8) b cd;
-      Some (ascii_of_N (wordToN n), b, cd).
+      Ok (ascii_of_N (wordToN n), b, cd).
 
   Local Open Scope nat.
   Theorem Ascii_decode_correct
@@ -61,18 +61,18 @@ Section Ascii.
 
   Lemma ascii_decode_lt
     : forall (b3 : B) (cd0 : CacheDecode) (a : ascii) (b' : B) (cd' : CacheDecode),
-      decode_ascii b3 cd0 = Some (a, b', cd') -> lt_B b' b3.
+      decode_ascii b3 cd0 = Ok (a, b', cd') -> lt_B b' b3.
   Proof.
     unfold decode_ascii; intros.
     destruct (WordOpt.decode_word b3 cd0) as [ [ [? ?] ?] | ] eqn: ? ;
       simpl in *; try discriminate.
-    apply WordOpt.decode_word_lt in Heqo.
+    apply WordOpt.decode_word_lt in Heqh.
     injections; eauto.
   Qed.
 
   Lemma ascii_decode_le :
     forall (b : B) (cd : CacheDecode) (a : ascii) (b' : B) (cd' : CacheDecode),
-      decode_ascii b cd = Some (a, b', cd') -> le_B b' b.
+      decode_ascii b cd = Ok (a, b', cd') -> le_B b' b.
   Proof.
     unfold decode_ascii, DecodeBindOpt2; intros.
     destruct (decode_word b cd) as [ [ [? ? ] ?] | ] eqn: decode_b; simpl in H;

@@ -32,9 +32,9 @@ Section Nat.
     reflexivity.
   Qed.
 
-  Definition decode_nat (b : T) (cd : CacheDecode) : option (nat * T * CacheDecode) :=
+  Definition decode_nat (b : T) (cd : CacheDecode) : Hopefully (nat * T * CacheDecode) :=
     `(w, b, cd) <- decode_word (sz:=sz) b cd;
-      Some (wordToNat w, b, cd).
+      Ok (wordToNat w, b, cd).
 
   Local Open Scope nat.
   Theorem Nat_decode_correct
@@ -50,6 +50,6 @@ Section Nat.
     apply wordToNat_natToWord_idempotent.
     apply Nomega.Nlt_in. rewrite Npow2_nat. rewrite Nnat.Nat2N.id. auto.
 
-    derive_decoder_equiv.
+    derive_decoder_equiv. 
   Qed.
 End Nat.

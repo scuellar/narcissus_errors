@@ -113,10 +113,10 @@ Section ByteBufferFormat.
              (ce : CacheFormat) : Comp (T * CacheFormat) :=
     format_Vector format_word (projT2 b) ce.
 
-  Definition decode_bytebuffer (s : nat) (b : T) (cd : CacheDecode) : option ({ n :_ & ByteBuffer.t n } * T * CacheDecode) :=
+  Definition decode_bytebuffer (s : nat) (b : T) (cd : CacheDecode) : Hopefully ({ n :_ & ByteBuffer.t n } * T * CacheDecode) :=
     match decode_Vector (decode_word (sz := 8)) s b cd with
-    | Some (v, t, cd) => Some (existT ByteBuffer.t _ v, t, cd)
-    | None => None
+    | Ok (v, t, cd) => Ok (existT ByteBuffer.t _ v, t, cd)
+    | Error e => Error e
     end.
 
   Theorem ByteBuffer_decode_correct

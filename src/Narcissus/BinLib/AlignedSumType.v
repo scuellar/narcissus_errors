@@ -275,12 +275,13 @@ Section AlignedSumType.
               ilist (B := fun T => forall n, AlignedDecodeM T n) types)
            (idx : Fin.t (S n))
     : AlignedDecodeM (SumType types) m :=
-    (fun v idx' cd => `(i, bs, cd') <- (ith aligned_decoders idx _ v idx' cd); Some (inj_SumType types idx i, bs, cd')).
+    (fun v idx' cd => `(i, bs, cd') <- (ith aligned_decoders idx _ v idx' cd);
+     Ok (inj_SumType types idx i, bs, cd')).
 
   Lemma AlignedDecodeSumTypeM {C : Type}
         {n}
         {types : Vector.t Type (S n)}
-        (decoders : ilist (B := fun T => ByteString -> CacheDecode -> option (T * ByteString * CacheDecode)) types)
+        (decoders : ilist (B := fun T => ByteString -> CacheDecode -> Hopefully (T * ByteString * CacheDecode)) types)
         (aligned_decoders :
            ilist (B := fun T => forall n, AlignedDecodeM T n) types)
         (idx : Fin.t (S n))
@@ -301,7 +302,9 @@ Section AlignedSumType.
     unfold decode_SumType, SumTypeAlignedDecodeM.
     eapply DecodeMEquivAlignedDecodeM_trans; simpl; intros.
     eapply Bind_DecodeMEquivAlignedDecodeM; eauto.
-    2: simpl; higher_order_reflexivity.
+    2: { simpl. destruct (ith decoders idx b cd) as [((?&?)&?)|]; eauto; simpl.
+         constructor; left. 
+         higher_order_reflexivity. }
     2: simpl; unfold AlignedDecodeMEquiv; simpl; intros.
     intros.
     eapply DecodeMEquivAlignedDecodeM_trans; simpl; intros.

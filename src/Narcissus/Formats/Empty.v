@@ -33,7 +33,7 @@ Lemma ExtractViewFrom {S V T}
          View_Predicate
          view
          empty_Format
-         (fun t' ctxD => Some (v, t', ctxD))
+         (fun t' ctxD => Ok (v, t', ctxD))
          decode_inv
          View_Format.
 Proof.
@@ -64,7 +64,7 @@ Corollary CorrectDecoderEmpty {S T}
          Source_Predicate
          eq
          empty_Format
-         (fun t' ctxD => if b then Some (s, t', ctxD) else None)
+         (fun t' ctxD => if b then Ok (s, t', ctxD) else OtherErrorInfo "Condition false (empty decoder)")
          decode_inv
          empty_Format.
 Proof.
@@ -96,7 +96,7 @@ Lemma ExtractViewFromRefined {S V T}
          view
          format
          empty_Format
-         (fun t' ctxD => Some (v, t', ctxD))
+         (fun t' ctxD => Ok (v, t', ctxD))
          decode_inv
          empty_Format.
 Proof.

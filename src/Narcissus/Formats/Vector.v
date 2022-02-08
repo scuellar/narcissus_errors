@@ -15,7 +15,7 @@ Section Vector.
 
   Variable A_predicate : A -> Prop.
   Variable format_A : A -> CacheFormat -> Comp (B * CacheFormat).
-  Variable A_decode : B -> CacheDecode -> option (A * B * CacheDecode).
+  Variable A_decode : B -> CacheDecode -> Hopefully (A * B * CacheDecode).
   Variable A_cache_inv : CacheDecode -> Prop.
   Variable A_decode_pf
     : CorrectDecoder monoid
@@ -47,12 +47,12 @@ Section Vector.
     end%comp.
 
   Fixpoint decode_Vector (n : nat) (b : B) (cd : CacheDecode)
-    : option (Vector.t A n * B * CacheDecode) :=
+    : Hopefully (Vector.t A n * B * CacheDecode) :=
     match n with
-    | O => Some (Vector.nil _, b, cd)
+    | O => Ok (Vector.nil _, b, cd)
     | S s' => `(x, b1, e1) <- A_decode b cd;
               `(xs, b2, e2) <- decode_Vector s' b1 e1;
-              Some (Vector.cons _ x _ xs, b2, e2)
+              Ok (Vector.cons _ x _ xs, b2, e2)
     end.
 
   Theorem Vector_decode_correct
@@ -103,9 +103,9 @@ Section Vector.
           simpl in *; try discriminate.
         destruct (decode_Vector sz b c) as [ [ [? ?] ?] | ] eqn: ? ;
           simpl in *; try discriminate; injections.
-        eapply (proj2 A_decode_pf) in Heqo; eauto;
-          destruct Heqo as [? [? ?] ]; destruct_ex; intuition; subst;
-            eapply IHsz in Heqo0; eauto; destruct Heqo0 as [? [? ?] ];
+        eapply (proj2 A_decode_pf) in Heqh; eauto;
+          destruct Heqh as [? [? ?] ]; destruct_ex; intuition; subst;
+            eapply IHsz in Heqh0; eauto; destruct Heqh0 as [? [? ?] ];
               destruct_ex; intuition; subst.
         simpl.
         eexists _, _; intuition eauto.

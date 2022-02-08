@@ -14,6 +14,34 @@ Require Import
 
 Require Import Bedrock.Word.
 
+(* For errors
+   SC-TODO: Move to the tright place
+ *)
+Lemma CorrectAlignedEncoderForFormatLabel
+  : forall c S X format' tag,
+    @CorrectAlignedEncoder c S format' X ->
+    @CorrectAlignedEncoder c S (format_label tag format') (encoder_tag tag X).
+Proof. intros *; eapply CorrectAlignedEncoder_morphism.
+       - eapply format_label_equiv.
+       - intros. unfold encoder_tag, catchError.
+         break_match; auto.
+Qed.
+
+
+        Lemma AlignedDecodeTag {C : Set}
+              (t : DecodeM (C * _) ByteString)
+              (t' : forall {numBytes}, AlignedDecodeM C numBytes)
+              label
+          : (DecodeMEquivAlignedDecodeM t (@t'))
+            -> DecodeMEquivAlignedDecodeM
+                 (decoder_tag label t)
+                 (fun n bb => decoder_tag label (@t' n bb)).
+        Proof.
+          intros. constructor.
+        Admitted.
+(** end move
+*)
+
 Ltac start_synthesizing_decoder :=
   match goal with
   | |- CorrectAlignedDecoderFor ?Invariant ?Spec =>
@@ -51,6 +79,7 @@ Ltac align_decoders_step :=
       | |- context [ decode_string_with_term_char ?term_char _ _] =>
       eapply (fun H H' => @AlignedDecodeStringTermCharM _ _ H H' _ (NToWord 8 (Ascii.N_of_ascii term_char))); intros; eauto
       end
+    | eapply @AlignedDecodeTag; intros
     | eapply @AlignedDecodeDelimiterSimpleM; intros
     | eapply @AlignedDecodeNatM; intros
     | eapply @AlignedDecodeByteBufferM; intros; eauto
@@ -88,6 +117,7 @@ Ltac align_decoders_step :=
     | eapply @AlignedDecode_shift_if_bool
     | eapply @Return_DecodeMEquivAlignedDecodeM
     | eapply @AlignedDecode_Sumb
+    | eapply AlignedDecode_hbind; intros
     | eapply AlignedDecode_ifopt; intros
     | match goal with
       |- DecodeMEquivAlignedDecodeM (fun b c => If_Opt_Then_Else _ _ _) _ =>
@@ -306,7 +336,7 @@ Lemma length_ByteString_Projection_compose {S S' S''}:
       format_B s2 env ∋ tenv' ->
       format_A s1 (snd tenv') ∋ tenv'' ->
       exists tenv3 tenv4 : _ * CacheFormat,
-        projT1 encoder_B_OK s2 env = Some tenv3
+        projT1 encoder_B_OK s2 env = Ok tenv3
         /\ format_A s1 (snd tenv3) ∋ tenv4.
   Proof.
     intros.
@@ -317,8 +347,8 @@ Lemma length_ByteString_Projection_compose {S S' S''}:
     - eexists _, _; simpl in *; split; intros; eauto.
       simpl in *.
       destruct c; destruct c1; eauto.
-    - eapply (proj1 (projT2 encoder_B_OK)) in Heqo.
-      eapply Heqo in H; intuition.
+    - eapply isError, (proj1 (projT2 encoder_B_OK)) in Heqh.
+      eapply Heqh in H; intuition.
   Qed.
 
   Ltac calculate_length_ByteString' :=
@@ -644,7 +674,8 @@ Ltac align_encoder_step :=
       [ repeat align_encoder_step
       | eexists; reflexivity ]
     end
-  | new_encoder_rules
+    | new_encoder_rules
+    | eapply CorrectAlignedEncoderForFormatLabel
   | eapply CorrectAlignedEncoderForFormatDelimiter; [
       unshelve (instantiate (1:=_))
     | unshelve (instantiate (1:=_)); [| unshelve (instantiate (2:=_)) ] ];
@@ -678,7 +709,7 @@ Ltac align_encoder_step :=
     end
   | match goal with
     | |- CorrectAlignedEncoder (_ ++ _) _ =>
-      eapply @CorrectAlignedEncoderForThenC; [  | unshelve (instantiate (1 := _));
+      eapply CorrectAlignedEncoderForThenC; [  | unshelve (instantiate (1 := _));
                                                   [try collapse_unaligned_words
                                                   | try eauto using encoder_empty_cache_OK ] ]
     end ].
@@ -754,8 +785,8 @@ Ltac encoder_reflexivity :=
     reflexivity
   end.
 
-  Ltac rewrite_DecodeOpt2_fmap :=
-    set_refine_evar;
-    progress rewrite ?BindOpt_map, ?DecodeOpt2_fmap_if,
-    ?DecodeOpt2_fmap_if_bool;
-    subst_refine_evar.
+  (* Ltac rewrite_DecodeOpt2_fmap := *)
+  (*   set_refine_evar; *)
+  (*   progress rewrite ?BindOpt_map, ?DecodeOpt2_fmap_if, *)
+  (*   ?DecodeOpt2_fmap_if_bool; *)
+  (*   subst_refine_evar. *)

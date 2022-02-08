@@ -63,7 +63,7 @@ Section Checksum.
              -> predicate a
              -> bin_measure (mappend b (mappend (format_checksum b') b''))
                 = formatd_A_measure (mappend (mappend b (mappend (format_checksum b') b'')) ext))
-        (decodeA : B -> CacheDecode -> option (A * B * CacheDecode))
+        (decodeA : B -> CacheDecode -> Hopefully (A * B * CacheDecode))
         (decodeA_pf :
            cache_inv_Property P P_inv
            -> CorrectDecoder
@@ -92,7 +92,7 @@ Section Checksum.
              -> decode2 (project data) (mappend x1 ext) c1 = Some (data, ext, xenv')
              -> format2 data (snd (x, x0)) ↝ (x1, x2)
              -> mappend x (mappend x3 (mappend x1 ext)) = mappend x (mappend (calculate_checksum x x1) (mappend x1 ext))*)
-    : CorrectDecoder
+    : forall e, CorrectDecoder
         monoid
         predicate
         predicate
@@ -101,7 +101,7 @@ Section Checksum.
         (fun (bin : B) (env : CacheDecode) =>
            if checksum_Valid_dec (formatd_A_measure bin) bin then
              decodeA bin env
-           else None)
+           else Error e)
         P
         (composeChecksum format1 format2).
   Proof.
@@ -200,7 +200,7 @@ Section Checksum.
               -> format2 s (addE (snd t1) checksum_sz) t2
               -> bin_measure (fst t1) + (bin_measure (format_checksum w)
                                          + bin_measure (fst t2)) = v)
-        (decodeA : B -> CacheDecode -> option (A * B * CacheDecode))
+        (decodeA : B -> CacheDecode -> Hopefully (A * B * CacheDecode))
         (decodeA_pf :
            cache_inv_Property P P_inv
            -> CorrectDecoder
@@ -217,7 +217,7 @@ Section Checksum.
              -> format2 data (addE x0 checksum_sz) ↝ (x1, x2)
              -> checksum_Valid (bin_measure (mappend x (mappend (format_checksum c) x1))) (mappend (mappend x (mappend (format_checksum c) x1)) ext)
              -> checksum_Valid (bin_measure (mappend x (mappend (format_checksum c) x1))) (mappend (mappend x (mappend (format_checksum c) x1)) ext'))
-    : CorrectDecoder
+    : forall e, CorrectDecoder
         monoid
         predicate
         predicate
@@ -227,7 +227,7 @@ Section Checksum.
            `(n, _, _) <- decode_measure bin env;
            if checksum_Valid_dec n bin then
              decodeA bin env
-           else None)
+           else Error e)
         P
         (composeChecksum format1 format2).
   Proof.
@@ -306,8 +306,8 @@ Section Checksum.
         eassumption.
         2: computes_to_econstructor.
         2: intuition.
-        generalize Heqo as H'; intro.
-        eapply H7 in Heqo; eauto.
+        generalize Heqh as H'; intro.
+        eapply H7 in Heqh; eauto.
         split_and; destruct_ex; split_and.
         rewrite unfold_computes in H14.
         fold (format_checksum x4) in H8.

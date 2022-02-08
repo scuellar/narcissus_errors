@@ -36,7 +36,7 @@ Section SequenceFormat.
       fun t env =>
       `(s', t', env') <- decode1 t env;
       `(s, t', env'') <- decode2 s' t' env';
-      Some ((s', s), t', env'').
+      Ok ((s', s), t', env'').
 
   Definition sequence_Encode
              {S : Type}
@@ -44,7 +44,7 @@ Section SequenceFormat.
     := (fun s env =>
           `(t1, env') <- encode1 s env ;
           `(t2, env'') <- encode2 s env';
-          Some (mappend t1 t2, env'')).
+          Ok (mappend t1 t2, env'')).
 
   Notation "x ++ y" := (sequence_Format x y) : format_scope .
 
@@ -62,7 +62,7 @@ Section SequenceFormat.
              format1 s env ∋ tenv'
              -> format2 s (snd tenv') ∋ tenv''
              -> exists tenv3 tenv4,
-                 encode1 s env = Some tenv3
+                 encode1 s env = Ok tenv3
                  /\ format2 s (snd tenv3) ∋ tenv4)
         (encode2_correct : CorrectEncoder format2 encode2)
     : CorrectEncoder (format1 ++ format2)
@@ -78,14 +78,19 @@ Section SequenceFormat.
     -  unfold Bind2 in *; computes_to_inv; destruct v;
          destruct v0; simpl in *.
        destruct (encode1 a env) as [ [t1 xxenv] | ] eqn: ? ;
-        simpl in *; try discriminate; eauto.
+         simpl in *.
+       2: { eapply H0; eauto. rewrite Heqh. constructor. }
        eapply H2; try eassumption.
        destruct (encode2 a xxenv) as [ [t2' xxxenv] | ] eqn: ? ;
-        simpl in *; try discriminate; injections.
-       specialize (encode1_consistent _ _ _ _ H4 H4');
-         destruct_ex; split_and.
-       rewrite H6 in Heqo; injections; simpl in *.
-       destruct x0; elimtype False; eauto.
+         simpl in *; injections.
+       + inversion H3.
+       + specialize (encode1_consistent _ _ _ _ H4 H4');
+           destruct_ex; split_and.
+         rewrite H6 in Heqh; injections; simpl in *.
+         destruct x0; elimtype False.
+         eapply H2.
+         rewrite Heqh0; constructor.
+         eassumption.
   Qed.
 
   Lemma Sequence_decode_correct
@@ -166,14 +171,14 @@ Proof.
     unfold sequence_Decode', DecodeBindOpt2, BindOpt in H1.
     destruct (decode1 t env') as [ [ [? ?] ? ] | ] eqn : ? ;
       simpl in *; try discriminate.
-    generalize Heqo; intros Heqo'.
-    eapply (proj2 (decode1_pf (proj1 P_inv_pf))) in Heqo; eauto.
+    generalize Heqh; intros Heqh'.
+    eapply (proj2 (decode1_pf (proj1 P_inv_pf))) in Heqh; eauto.
     split_and; destruct_ex; split_and.
     subst.
     destruct (decode2 v0 t0 c) as [ [ [? ?] ? ] | ] eqn : ? ;
       simpl in *; try discriminate; injections.
-    eapply (proj2 (decode2_pf _ H5 H7)) in Heqo; eauto.
-    destruct Heqo as [? ?]; destruct_ex; split_and; subst.
+    eapply (proj2 (decode2_pf _ H5 H7)) in Heqh; eauto.
+    destruct Heqh as [? ?]; destruct_ex; split_and; subst.
     setoid_rewrite mappend_assoc.
     split; eauto.
     eexists _, _; repeat split; eauto.

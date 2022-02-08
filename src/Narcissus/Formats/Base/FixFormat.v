@@ -24,24 +24,24 @@ Section FixFormat.
                        (fCod := T * CacheFormat) format_body.
 
   Fixpoint FueledFix' {A B C}
-           (f : (B -> C -> option A) -> B -> C -> option A)
+           (f : (B -> C -> Hopefully A) -> B -> C -> Hopefully A)
            (n : nat)
-    : B -> C -> option A :=
+    : B -> C -> Hopefully A :=
     match n with
     | Datatypes.S n' => f (FueledFix' f n')
-    | _ => fun _ _ => None
+    | _ => fun _ _ => Error (LabelError "Ran out of fuel (FueledFix')" UnknownError)
     end.
 
 
-  Theorem FueledFix_continuous {A B C} (F : (B -> C -> option A) -> B -> C -> option A)
+  Theorem FueledFix_continuous {A B C} (F : (B -> C -> Hopefully A) -> B -> C -> Hopefully A)
     : (forall n a b c,
-          FueledFix' F n b c = Some a ->
-          FueledFix' F (Datatypes.S n) b c = Some a) ->
+          FueledFix' F n b c = Ok a ->
+          FueledFix' F (Datatypes.S n) b c = Ok a) ->
       forall n n',
         n <= n' ->
         forall a b c,
-          FueledFix' F n b c = Some a ->
-          FueledFix' F n' b c = Some a.
+          FueledFix' F n b c = Ok a ->
+          FueledFix' F n' b c = Ok a.
   Proof.
     intros; induction H0; eauto.
   Qed.

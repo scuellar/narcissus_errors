@@ -20,7 +20,7 @@ Section FixList.
 
   Variable A_predicate : A -> Prop.
   Variable format_A : A -> CacheFormat -> Comp (T * CacheFormat).
-  Variable A_decode : T -> CacheDecode -> option (A * T * CacheDecode).
+  Variable A_decode : T -> CacheDecode -> Hopefully (A * T * CacheDecode).
   Variable A_cache_inv : CacheDecode -> Prop.
   Variable A_decode_pf : CorrectDecoder monoid A_predicate A_predicate
                                         eq format_A A_decode A_cache_inv
@@ -49,12 +49,12 @@ Section FixList.
                    (mappend b1 b2, env2)
     end%comp.
 
-  Fixpoint decode_list (s : nat) (b : T) (cd : CacheDecode) : option (list A * T * CacheDecode) :=
+  Fixpoint decode_list (s : nat) (b : T) (cd : CacheDecode) : Hopefully (list A * T * CacheDecode) :=
     match s with
-    | O => Some (nil, b, cd)
+    | O => Ok (nil, b, cd)
     | S s' => `(x, b1, e1) <- A_decode b cd;
               `(xs, b2, e2) <- decode_list s' b1 e1;
-              Some (x :: xs, b2, e2)
+              Ok (x :: xs, b2, e2)
     end.
 
   Theorem FixList_decode_correct
@@ -105,9 +105,9 @@ Section FixList.
           simpl in *; try discriminate.
         destruct (decode_list sz t0 c) as [ [ [? ?] ?] | ] eqn: ? ;
           simpl in *; try discriminate; injections.
-        eapply (proj2 A_decode_pf) in Heqo; eauto;
-          destruct Heqo; destruct_ex; intuition; subst;
-            eapply IHsz in Heqo0; eauto; destruct Heqo0;
+        eapply (proj2 A_decode_pf) in Heqh; eauto;
+          destruct Heqh; destruct_ex; intuition; subst;
+            eapply IHsz in Heqh0; eauto; destruct Heqh0;
               destruct_ex; intuition; subst.
         simpl.
         eexists _, _; simpl; unfold id; intuition eauto.

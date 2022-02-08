@@ -25,12 +25,12 @@ Section StrictTerminalFormat.
     : DecodeM S T :=
     fun t env =>
       If (beq_nat (bin_measure t) 0)
-         Then Some (s, env)
-         Else None.
+         Then Ok (s, env)
+         Else (Error (LabelError "Measure error" EndOfBuffer)).
 
   Definition StrictTerminal_Encode
     : EncodeM S T :=
-    fun a env => Some (mempty, env).
+    fun a env => Ok (mempty, env).
 
   Lemma CorrectEncoder_StrictTerminal
     : CorrectEncoder StrictTerminal_Format StrictTerminal_Encode.
@@ -39,7 +39,7 @@ Section StrictTerminalFormat.
       split; intros.
     -  injections;
          repeat computes_to_econstructor; eauto using measure_mempty.
-    - discriminate.
+    - inversion H. 
   Qed.
 
 End StrictTerminalFormat.

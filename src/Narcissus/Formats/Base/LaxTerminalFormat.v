@@ -21,11 +21,11 @@ Section LaxTerminalFormat.
   Definition LaxTerminal_Decode
              (s : S)
     : DecodeM (S * T) T :=
-    fun t env => Some (s, t, env).
+    fun t env => Ok (s, t, env).
 
   Definition LaxTerminal_Encode
     : EncodeM (S * T) T :=
-    fun st env => Some (snd st, env).
+    fun st env => Ok (snd st, env).
 
   Lemma CorrectEncoder_LaxTerminal
     : CorrectEncoder LaxTerminal_Format LaxTerminal_Encode.
@@ -34,7 +34,7 @@ Section LaxTerminalFormat.
       split; intros.
     -  injections;
          repeat computes_to_econstructor; eauto using measure_mempty.
-    - discriminate.
+    - inversion H. 
   Qed.
 
 End LaxTerminalFormat.

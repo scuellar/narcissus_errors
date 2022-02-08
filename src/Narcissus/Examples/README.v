@@ -115,7 +115,7 @@ Module Sensor0.
     True.
 
   Let enc_dec : EncoderDecoderPair format invariant.
-  Proof. derive_encoder_decoder_pair.  Defined.
+  Proof. derive_encoder_decoder_pair. Defined.
 
   Let encode := encoder_impl enc_dec.
   (* fun (sz : nat) (r : sensor_msg) (v : t Core.char sz) =>
@@ -129,6 +129,23 @@ Module Sensor0.
       b' <- GetCurrentByte;
       w <- return b0⋅b';
       return {| stationID := b; data := w |}) v 0 tt *)
+
+  Definition my_message : sensor_msg := Build_sensor_msg (natToWord _ 7) (natToWord _ 42).
+  Definition my_message_encoded:= encode _ my_message (initialize_Aligned_ByteString 4).
+  Compute my_message_encoded.
+  Definition my_bad_message_encoded:= encode _ my_message (initialize_Aligned_ByteString 1).
+  Compute my_bad_message_encoded.
+  
+  Definition my_decoded_message :=
+    decode _
+           ([WO~0~0~0~0~0~1~1~1; WO~0~0~0~0~0~0~0~0; WO~0~0~1~0~1~0~1~0; WO~0~0~0~0~0~0~0~0]).
+  Compute my_decoded_message.
+  (* Compute (wordToNat WO~0~0~0~0~0~0~0~0~0~0~1~0~1~0~1~0). *)
+  Definition my_bad_decoded_message :=
+    decode _
+           ([WO~0~0~1~0~1~0~1~0; WO~0~0~0~0~0~0~0~0]).
+  Compute my_bad_decoded_message.
+  
 End Sensor0.
 
 (** All user input is contained in box 1. `sensor_msg` is a record type with two fields; the Coq `Record` command additionally defines two functions `stationID` and `data` (of type `sensor_msg → …`) to access these fields. `format` specifies how to encode instances of this record: `format_word` is a Narcissus primitive that writes out its input bit by bit, and `++` is a sequencing operator (write this, then that).  `invariant` specifies additional constraints on well-formed packets, but there are none here.  Box 2 calls the `derive_encoder_decoder_pair` tactic provided by Narcissus, which generates an encoder and a decoder along with proofs of correctness (it takes about two to five seconds to return); the rest is routine boilerplate.  Boxes 2 and 3 show generated code. In box 2, the generated encoder takes a packet and a byte buffer and returns the encoded packet or `None` if it did not fit in the supplied buffer. In box 3, the decoder takes a buffer, and returns a packet or None if the buffer did not contain a valid encoding. Both generated programs live in stateful error monads, offering primitives to read (GetCurrentByte), skip (SkipCurrentByte), and write (SetCurrentByte) a single byte.  The encoder uses `low_bits` and `shift_right` to extract the low and high bits of the `data` field, and the decoder reassembles these two bytes using a shift and an addition, using the `⋅` operator: this byte-alignment transformation is part of the `derive_encoder_decoder_pair` logic. **)

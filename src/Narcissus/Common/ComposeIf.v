@@ -301,12 +301,12 @@ Lemma composeIf_subformat_correct_low
           Equiv env env' ->
           Source_Predicate s ->
           subformat s env ∋ (t, xenv) ->
-          exists v xenv', decodeB (mappend t ext) env' = Some (v, ext, xenv') /\
+          exists v xenv', decodeB (mappend t ext) env' = Ok (v, ext, xenv') /\
                    Equiv xenv xenv' /\ P xenv')
       (decodeB_OK' : forall env env' xenv' v t t',
           Equiv env env' ->
           P env' ->
-          decodeB t env' = Some (v, t', xenv') ->
+          decodeB t env' = Ok (v, t', xenv') ->
           P xenv' /\
           exists t'' xenv,
             (forall s t1 xenv,

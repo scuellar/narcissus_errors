@@ -20,7 +20,7 @@ Definition CorrectRefinedDecoder
            (View_Predicate : V -> Prop)
            (view : S -> V -> Prop)
            (format subformat : FormatM S T)
-           (decode : T -> CacheDecode -> option (V * T * CacheDecode))
+           (decode : T -> CacheDecode -> Hopefully (V * T * CacheDecode))
            (decode_inv : CacheDecode -> Prop)
            (view_format : V -> CacheFormat -> Comp (T * CacheFormat)) :=
   CorrectDecoder monoid Source_Predicate View_Predicate view
@@ -51,7 +51,7 @@ Definition Prefix_Format
        (View_Predicate : V -> Prop)
        (view : S -> V -> Prop)
        (format subformat : FormatM S T)
-       (decode : T -> CacheDecode -> option (V * T * CacheDecode))
+       (decode : T -> CacheDecode -> Hopefully (V * T * CacheDecode))
        (decode_inv : CacheDecode -> Prop)
        (view_format : V -> CacheFormat -> Comp (T * CacheFormat))
   : CorrectRefinedDecoder monoid' Source_Predicate View_Predicate view
@@ -82,7 +82,7 @@ Lemma CorrectRefinedDecoder_decode_impl
        (monoid' : Monoid T)
        (Source_Predicate : S -> Prop)
        (format : FormatM S T)
-       (decode : T -> CacheDecode -> option (S * T * CacheDecode))
+       (decode : T -> CacheDecode -> Hopefully (S * T * CacheDecode))
        (decode_inv : CacheDecode -> Prop)
   : CorrectRefinedDecoder monoid' Source_Predicate Source_Predicate eq
                           format format decode decode_inv format

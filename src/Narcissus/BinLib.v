@@ -16,6 +16,8 @@ Require Export
         Fiat.Narcissus.BinLib.AlignedEncodeMonad
         Fiat.Narcissus.BinLib.AlignedIPChecksum.
 
+Require Export Fiat.Narcissus.Common.Specs. (* Only for errors! Refactor! *)
+
 Global Instance ByteStringQueueMonoid : Monoid ByteString := ByteStringQueueMonoid.
 
 (*Lemma CorrectAlignedDecoder2CorrectDecoder
@@ -56,9 +58,9 @@ Lemma CorrectDecodeEncode'
       Cache.Equiv envE envD
       -> Invariant a
       -> snd (fst (proj1_sig decoder)) envD
-      -> projT1 encoder a envE = Some (b, envE')
+      -> projT1 encoder a envE = Ok (b, envE')
       -> forall ext, exists envD',
-          fst (fst (proj1_sig decoder)) (mappend b ext) envD = Some (a, ext, envD').
+          fst (fst (proj1_sig decoder)) (mappend b ext) envD = Ok (a, ext, envD').
 Proof.
   intros.
   destruct encoder as [encoder encoder_OK].
@@ -85,13 +87,13 @@ Lemma CorrectDecodeEncode
       -> Invariant a
       -> snd (projT1 (projT2 decoder)) cd
       -> forall idx ce' v',
-          projT1 encoder sz v 0 a ce = Some (v', idx, ce')
+          projT1 encoder sz v 0 a ce = Ok (v', idx, ce')
           -> exists cd' idx',
-            (projT1 decoder sz) v' 0 cd = Some (a, idx', cd').
+            (projT1 decoder sz) v' 0 cd = Ok (a, idx', cd').
 Proof.
   intros.
   destruct (projT1 (projT2 encoder) a ce) as [ [? ?] | ] eqn: ?.
-  - generalize Heqo; intro.
+  - generalize Heqh; intro.
     (*eapply (@CorrectDecodeEncode' _ _ _ _ _ _
                                   (CorrectAlignedEncoder2CorrectEncoder _ encoder)
                                   (CorrectAlignedDecoder2CorrectDecoder _ _ decoder))
@@ -184,7 +186,7 @@ Lemma CorrectEncodeDecode
     forall sz v' ce cd cd' s idx',
       Cache.Equiv ce cd
       -> snd (projT1 (projT2 decoder)) cd
-      -> (projT1 decoder sz) v' 0 cd = Some (s, idx', cd')
+      -> (projT1 decoder sz) v' 0 cd = Ok (s, idx', cd')
       -> Invariant s /\
          exists ce' (v1 : Vector.t (word 8) idx') (v2 : Vector.t (word 8) (sz - idx')) H,
            Guarded_Vector_split idx' sz v' = eq_rect _ _ (Vector.append v1 v2) _ H

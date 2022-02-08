@@ -41,18 +41,18 @@ Section AlignedList.
            (A_decode_align : forall n,
                ByteBuffer.t n
                -> CacheDecode
-               -> option (A * {n : _ & Vector.t _ n}
+               -> Hopefully (A * {n : _ & Vector.t _ n}
                           * CacheDecode))
            (n : nat)
            {sz}
            (v : ByteBuffer.t sz)
            (cd : CacheDecode)
-    : option (list A * {n : _ & Vector.t _ n} * CacheDecode) :=
+    : Hopefully (list A * {n : _ & Vector.t _ n} * CacheDecode) :=
     match n with
-    | 0 => Some (@nil _, existT _ _ v, cd)
+    | 0 => Ok (@nil _, existT _ _ v, cd)
     | S s' => `(x, b1, e1) <- A_decode_align sz v cd;
                 `(xs, b2, e2) <- align_decode_list A_decode_align s' (projT2 b1) e1;
-                Some ((x :: xs)%list, b2, e2)
+  Ok ((x :: xs)%list, b2, e2)
     end.
 
   Lemma optimize_align_decode_list
@@ -60,35 +60,33 @@ Section AlignedList.
         (A_decode :
            ByteString
            -> CacheDecode
-           -> option (A * ByteString * CacheDecode))
+           -> Hopefully (A * ByteString * CacheDecode))
         (A_decode_align : forall n,
             ByteBuffer.t n
             -> CacheDecode
-            -> option (A * {n : _ & Vector.t _ n}
+            -> Hopefully (A * {n : _ & Vector.t _ n}
                        * CacheDecode))
         (A_decode_OK :
            forall n (v : Vector.t _ n) cd,
              A_decode (build_aligned_ByteString v) cd =
-             Ifopt A_decode_align n v cd as a Then
-                                              Some (fst (fst a), build_aligned_ByteString (projT2 (snd (fst a))), snd a)
-                                              Else
-                                              None)
+               HBind A_decode_align n v cd as a With
+                                                Ok (fst (fst a), build_aligned_ByteString (projT2 (snd (fst a))), snd a)
+                                              )
     : forall (n : nat)
              {sz}
              (v : ByteBuffer.t sz)
              (cd : CacheDecode),
       decode_list A_decode n (build_aligned_ByteString v) cd =
-      Ifopt align_decode_list A_decode_align n v cd as a Then
-                                                         Some (fst (fst a), build_aligned_ByteString (projT2 (snd (fst a))), snd a)
-                                                         Else
-                                                         None.
+        HBind align_decode_list A_decode_align n v cd as a With
+                                                           Ok (fst (fst a), build_aligned_ByteString (projT2 (snd (fst a))), snd a)
+                                                         .
   Proof.
     induction n; simpl; intros; eauto.
     rewrite A_decode_OK.
-    rewrite (If_Opt_Then_Else_DecodeBindOpt).
+    rewrite (HBind_DecodeBindOpt).
     destruct (A_decode_align sz v cd) as [ [ [? [? ?] ] ?]  | ]; simpl; eauto.
     rewrite IHn.
-    rewrite (If_Opt_Then_Else_DecodeBindOpt).
+    rewrite (HBind_DecodeBindOpt).
     destruct (align_decode_list A_decode_align n t c)
       as [ [ [? [? ?] ] ?]  | ]; simpl; eauto.
   Qed.
@@ -277,12 +275,14 @@ Section AlignedList.
            As
            env :=
       match As with
-      | nil => if Coq.Init.Nat.ltb idx (S sz) then @ReturnAlignedEncodeM _ (list A) _ v idx nil env else None
-      | a :: As' => Ifopt (A_format_align sz v idx a env) as a' Then
+      | nil => if Coq.Init.Nat.ltb idx (S sz)
+               then @ReturnAlignedEncodeM _ (list A) _ v idx nil env
+               else Error (LabelError "Reading list" EndOfBuffer)
+      | a :: As' => HBind (A_format_align sz v idx a env) as a' With
                                                                 AlignedEncodeList' A_format_align sz (fst (fst a'))
                                                               (snd (fst a'))
                                                               As' (snd a')
-                                                              Else None
+                                                              
     end.
 
   Definition AlignedEncodeList {A}
@@ -299,7 +299,7 @@ Section AlignedList.
             format_A a env ∋ tenv' ->
             format_list format_A l (snd tenv') ∋ tenv'' ->
             exists tenv3 tenv4 : _ * CacheFormat,
-              projT1 encode_A_OK a env = Some tenv3
+              projT1 encode_A_OK a env = Ok tenv3
               /\ format_list format_A l (snd tenv3) ∋ tenv4)
     : CorrectAlignedEncoder (format_list format_A)
                                (@AlignedEncodeList A encode_A).
@@ -308,10 +308,10 @@ Section AlignedList.
     rename encode_A_OK into X.
     eexists ((fix AlignedEncodeList (As : list A) env :=
                match As with
-               | nil => Some (mempty, env)
+               | nil => Ok (mempty, env)
                | a :: As' => `(t1, env') <- projT1 X a env;
                              `(t2, env'') <- AlignedEncodeList As' env';
-                             Some (mappend t1 t2, env'')
+                             Ok (mappend t1 t2, env'')
                end)); split; [ split | split ].
     - revert env; induction s; intros; simpl; eauto.
       + injections; reflexivity.
@@ -320,13 +320,13 @@ Section AlignedList.
         unfold Bind2.
         rewrite (proj1 (a0 _ _)), refineEquiv_bind_unit; eauto.
         destruct ((fix AlignedEncodeList (As : list A) (env : CacheFormat) {struct As} :
-                          option (ByteString * CacheFormat) :=
+                          Hopefully (ByteString * CacheFormat) :=
                           match As with
-                          | [] => Some (ByteString_id, env)
+                          | [] => Ok (ByteString_id, env)
                           | a :: As' =>
                               `(t1, env') <- encode_A' a env;
                               `(t2, env'') <- AlignedEncodeList As' env';
-                              Some (ByteString_enqueue_ByteString t1 t2, env'')
+                              Ok (ByteString_enqueue_ByteString t1 t2, env'')
                           end)) as [ [? ?] | ] eqn: ?; simpl in *; try discriminate.
         rewrite IHs, refineEquiv_bind_unit; simpl; eauto.
         injections; reflexivity.
@@ -335,30 +335,30 @@ Section AlignedList.
       destruct (encode_A' a env) as [ [? ?] | ] eqn: ?; simpl in *; try discriminate;
         unfold Bind2; intros ?; computes_to_inv.
       + destruct (encode_A_OK' _ _ _ _ _ H0 H0') as [ [? ?] [ [? ?] [? ?] ] ].
-        rewrite H1 in Heqo; injections.
+        rewrite H1 in Heqh; injections.
         destruct ((fix AlignedEncodeList (As : list A) (env : CacheFormat) {struct As} :
-                     option (ByteString * CacheFormat) :=
+                     Hopefully (ByteString * CacheFormat) :=
                      match As with
-                     | [] => Some (ByteString_id, env)
+                     | [] => Ok (ByteString_id, env)
                      | a :: As' =>
                        `(t1, env') <- encode_A' a env;
                        `(t2, env'') <- AlignedEncodeList As' env';
-                       Some (ByteString_enqueue_ByteString t1 t2, env'')
-                     end) s c) as [ [? ?] | ] eqn: ?; simpl in *; try discriminate.
-        eapply IHs; eauto.
-      + eapply a0; eauto.
+                       Ok (ByteString_enqueue_ByteString t1 t2, env'')
+                     end) s c) as [ [? ?] | ] eqn: ?; simpl in *; try inversion H.
+        eapply IHs; eauto; rewrite Heqh; auto.
+      + eapply a0; eauto. rewrite Heqh; eauto.
     - induction s; intros; simpl; eauto.
       + injections; reflexivity.
       + destruct X as [encode_A' [? [? ?] ] ]; simpl in *.
         destruct (encode_A' a env) as [ [? ?] | ] eqn: ?; simpl in *; try discriminate.
         destruct ((fix AlignedEncodeList (As : list A) (env : CacheFormat) {struct As} :
-                          option (ByteString * CacheFormat) :=
+                          Hopefully (ByteString * CacheFormat) :=
                           match As with
-                          | [] => Some (ByteString_id, env)
+                          | [] => Ok (ByteString_id, env)
                           | a :: As' =>
                               `(t1, env') <- encode_A' a env;
                               `(t2, env'') <- AlignedEncodeList As' env';
-                              Some (ByteString_enqueue_ByteString t1 t2, env'')
+                              Ok (ByteString_enqueue_ByteString t1 t2, env'')
                           end)) as [ [? ?] | ] eqn: ?; simpl in *; try discriminate.
         injections.
         erewrite padding_ByteString_enqueue_ByteString, e, IHs; eauto.
@@ -375,10 +375,10 @@ Section AlignedList.
             reflexivity.
         * injections; rewrite length_ByteString_ByteString_id in H0.
           unfold AlignedEncodeList; simpl.
-          destruct (NPeano.Nat.ltb idx (S numBytes')) eqn: ?; eauto.
-          apply PeanoNat.Nat.ltb_lt in Heqb; lia.
+          destruct (NPeano.Nat.ltb idx (S numBytes')) eqn: ?; try constructor.
+          apply PeanoNat.Nat.ltb_lt in Heqb; lia. 
         * injections; simpl in H0; congruence.
-        * discriminate.
+        * inversion H.
       + destruct s; simpl in le_s; try solve [inversion le_s].
         * repeat apply conj; intros.
           -- injections; simpl in v; pattern v; apply case0; simpl.
@@ -389,12 +389,12 @@ Section AlignedList.
                reflexivity.
           -- injections; rewrite length_ByteString_ByteString_id in H0.
              unfold AlignedEncodeList; simpl.
-             destruct (NPeano.Nat.ltb idx (S numBytes')) eqn: ?; eauto.
+             destruct (NPeano.Nat.ltb idx (S numBytes')) eqn: ?; try constructor.
              apply PeanoNat.Nat.ltb_lt in Heqb; lia.
           -- injections; simpl in H0; congruence.
-          -- discriminate.
+          -- inversion H. 
         * assert ((forall (s : A * {As : list A & le (length As) n} ) (env : CacheFormat) (t : ByteString) (env' : CacheFormat),
-                      (projT1 X ∘ fst) s env = Some (t, env') -> padding t = 0)) as H'.
+                      (projT1 X ∘ fst) s env = Ok (t, env') -> padding t = 0)) as H'.
           { destruct X; clear IHn; simpl in *; intuition eauto. }
           assert (EncodeMEquivAlignedEncodeM (projT1 X ∘ fst)
                                              (fun (sz : nat) (t : ByteBuffer.t sz) (idx : nat)
@@ -405,12 +405,12 @@ Section AlignedList.
             apply H2; eauto. }
           assert (EncodeMEquivAlignedEncodeM (S := A * {As : list A & le (length As) n})
                     ((fix AlignedEncodeList (As : list A)
-                          (env : CacheFormat) {struct As} : option (ByteString * CacheFormat) :=
+                          (env : CacheFormat) {struct As} : Hopefully (ByteString * CacheFormat) :=
                         match As with
-                        | [] => Some (mempty, env)
+                        | [] => Ok (mempty, env)
                         | a :: As' => `(t1, env') <- projT1 X a env;
                                       `(t2, env'') <- AlignedEncodeList As' env';
-                                      Some (mappend t1 t2, env'')
+                                      Ok (mappend t1 t2, env'')
                         end) ∘ (@projT1 _ _) ∘ snd )
                     (fun (sz : nat) (t : ByteBuffer.t sz) (idx : nat)
                          (s : A * {As : list A & le (length As) n}) (env : CacheFormat) =>

@@ -527,105 +527,105 @@ Section DomainName.
   Qed.
 
   Definition decode_DomainName (b : B) (env : CacheDecode):
-    option (DomainName * B * CacheDecode).
+    Hopefully (DomainName * B * CacheDecode).
     refine (Fix well_founded_lt_b
-           (fun _ => CacheDecode -> option (DomainName * B * CacheDecode))
-      (fun b rec cd =>
-         `(labelheader, b1, env') <- Decode_w_Measure_le (decode_word (sz := 8)) b cd _;
-           match (wlt_dec (natToWord 8 191) labelheader) with (* It's a pointer! *)
-           | left l  => (`(ps, b2, env') <- Decode_w_Measure_le (decode_word (sz := 8)) (proj1_sig b1) env' decode_word_le;
-               match getD cd (exist _ _ l, ps) with
-                 | Some EmptyString => None (* bogus *)
-                 | Some domain => Some (domain, proj1_sig b2, env')
-                 | None => None (* bogus *)
-                 end)
-           | right r => (If (wlt_dec labelheader (natToWord 8 64)) Then (* It's a length octet *)
-         (match (weq labelheader (wzero 8)) with (* It's the terminal character. *)
-              | left _ => Some (EmptyString, proj1_sig b1, env')
-              | right n =>
-             (`(label, b3, env') <- Decode_w_Measure_lt (decode_string (wordToNat labelheader))
-               (proj1_sig b1) env' (decode_string_lt _ (n_eq_0_lt _ n));
-              Ifopt (index 0 "." label) as _ Then None
-              Else (`(domain, b4, e3) <- rec (proj1_sig b3) (lt_B_trans _ _ _) env';
-              If (string_dec domain "") Then
-                 Some (label, b4,
-                       Ifopt (peekD cd) as curPtr Then addD_G e3 (label, curPtr)
-                                                  Else e3)
-                 Else Some (label ++ (String "." domain), b4,
-                            Ifopt (peekD cd) as curPtr Then
-                            addD_G e3 (label ++ (String "." domain), curPtr)
-                            Else e3)
-             )) end)
-         Else None) end)%string b env);
-    try exact decode_word_le;
+                (fun _ => CacheDecode -> Hopefully (DomainName * B * CacheDecode))
+                (fun b rec cd =>
+                   `(labelheader, b1, env') <- Decode_w_Measure_le (decode_word (sz := 8)) b cd _;
+                   match (wlt_dec (natToWord 8 191) labelheader) with (* It's a pointer! *)
+                   | left l  => (`(ps, b2, env') <- Decode_w_Measure_le (decode_word (sz := 8)) (proj1_sig b1) env' decode_word_le;
+                                 match getD cd (exist _ _ l, ps) with
+                                 | Some EmptyString => OtherErrorInfo "Bogus? (Domain Name)" (* bogus *)
+                                 | Some domain => Ok (domain, proj1_sig b2, env')
+                                 | None => OtherErrorInfo "Bogus? (Domain Name)" (* bogus *)
+                                 end)
+                   | right r => (If (wlt_dec labelheader (natToWord 8 64)) Then (* It's a length octet *)
+                                    (match (weq labelheader (wzero 8)) with (* It's the terminal character. *)
+                                     | left _ => Ok (EmptyString, proj1_sig b1, env')
+                                     | right n =>
+                                         (`(label, b3, env') <- Decode_w_Measure_lt (decode_string (wordToNat labelheader))
+                                                                                    (proj1_sig b1) env' (decode_string_lt _ (n_eq_0_lt _ n));
+                                          Ifopt (index 0 "." label) as _ Then (OtherErrorInfo "Unknown (Domain Name)")
+                                                                         Else (`(domain, b4, e3) <- rec (proj1_sig b3) (lt_B_trans _ _ _) env';
+                                                                               If (string_dec domain "") Then
+                                                                                  Ok (label, b4,
+                                                                                         Ifopt (peekD cd) as curPtr Then addD_G e3 (label, curPtr)
+                                                                                                                    Else e3)
+                                                                                  Else Ok (label ++ (String "." domain), b4,
+                                                                                              Ifopt (peekD cd) as curPtr Then
+                                                                                                                         addD_G e3 (label ++ (String "." domain), curPtr)
+                                                                                                                         Else e3)
+                                         )) end)
+                                    Else (OtherErrorInfo "Unknown (Domain Name)")) end)%string b env);
+      try exact decode_word_le;
       try exact decode_word_lt.
   Defined.
 
   Lemma decode_body_monotone
     : forall (x : B)
-     (f g : forall y : B, lt_B y x -> CacheDecode -> option (DomainName * B * CacheDecode)),
-   (forall (y : B) (p : lt_B y x), f y p = g y p) ->
-   (fun cd : CacheDecode =>
-    `(labelheader, b1, env') <- Decode_w_Measure_le decode_word x cd decode_word_le;
-    match wlt_dec WO~1~0~1~1~1~1~1~1 labelheader with
-    | left l => `(ps, b2, env'0) <- Decode_w_Measure_le decode_word (` b1) env' decode_word_le;
-         match getD cd (exist _ labelheader l, ps) with
-         | Some ""%string => None
-         | Some (String _ _ as domain) => Some (domain, ` b2, env'0)
-         | None => None
-         end
-    | right r => (If wlt_dec labelheader WO~0~1~0~0~0~0~0~0
-          Then match weq labelheader (wzero 8) with
-               | in_left => Some (""%string, ` b1, env')
-               | right n =>
-                   `(label, b3, env'0) <- Decode_w_Measure_lt
-                                            (decode_string (wordToNat labelheader))
-                                            (` b1) env'
-                                            (decode_string_lt
-                                               (wordToNat labelheader)
-                                               (n_eq_0_lt labelheader n));
-                    Ifopt (index 0 "." label) as _ Then None
-                    Else (
-                   `(domain, b4, e3) <- f (` b3) (lt_B_trans x b1 b3) env'0;
-                   If (string_dec domain "") Then
-                      Some (label, b4,
-                            Ifopt (peekD cd) as curPtr Then addD_G e3 (label, curPtr)
-                                                       Else e3)
-                   Else Some (label ++ (String "." domain), b4,
-                              Ifopt (peekD cd) as curPtr Then addD_G e3
-                                                         (label ++ (String "." domain), curPtr)
-                                                         Else e3))%string
-               end Else None) end) =
-   (fun cd : CacheDecode =>
-      `(labelheader, b1, env') <- Decode_w_Measure_le decode_word x cd decode_word_le;
-        match wlt_dec WO~1~0~1~1~1~1~1~1 labelheader with
-        | left l => `(ps, b2, env'0) <- Decode_w_Measure_le decode_word (` b1) env' decode_word_le;
+             (f g : forall y : B, lt_B y x -> CacheDecode -> Hopefully (DomainName * B * CacheDecode)),
+      (forall (y : B) (p : lt_B y x), f y p = g y p) ->
+      (fun cd : CacheDecode =>
+         `(labelheader, b1, env') <- Decode_w_Measure_le decode_word x cd decode_word_le;
+       match wlt_dec WO~1~0~1~1~1~1~1~1 labelheader with
+       | left l => `(ps, b2, env'0) <- Decode_w_Measure_le decode_word (` b1) env' decode_word_le;
+       match getD cd (exist _ labelheader l, ps) with
+       | Some ""%string => (OtherErrorInfo "Unknown (Domain Name)")
+       | Some (String _ _ as domain) => Ok (domain, ` b2, env'0)
+       | None => (OtherErrorInfo "Unknown (Domain Name)")
+       end
+      | right r => (If wlt_dec labelheader WO~0~1~0~0~0~0~0~0
+                       Then match weq labelheader (wzero 8) with
+                            | in_left => Ok (""%string, ` b1, env')
+                            | right n =>
+                                `(label, b3, env'0) <- Decode_w_Measure_lt
+                                                         (decode_string (wordToNat labelheader))
+                                                         (` b1) env'
+                                                         (decode_string_lt
+                                                            (wordToNat labelheader)
+                                                            (n_eq_0_lt labelheader n));
+                    Ifopt (index 0 "." label) as _ Then (OtherErrorInfo "Unknown (Domain Name)")
+                                                   Else (
+                                                     `(domain, b4, e3) <- f (` b3) (lt_B_trans x b1 b3) env'0;
+                                                     If (string_dec domain "") Then
+                                                        Ok (label, b4,
+                                                             Ifopt (peekD cd) as curPtr Then addD_G e3 (label, curPtr)
+                                                                                        Else e3)
+                                                        Else Ok (label ++ (String "." domain), b4,
+                                                                  Ifopt (peekD cd) as curPtr Then addD_G e3
+                                                                                             (label ++ (String "." domain), curPtr)
+                                                                                             Else e3))%string
+                    end Else ((OtherErrorInfo "Unknown (Domain Name)"))) end) =
+        (fun cd : CacheDecode =>
+           `(labelheader, b1, env') <- Decode_w_Measure_le decode_word x cd decode_word_le;
+         match wlt_dec WO~1~0~1~1~1~1~1~1 labelheader with
+         | left l => `(ps, b2, env'0) <- Decode_w_Measure_le decode_word (` b1) env' decode_word_le;
          match getD cd (exist _ _ l, ps) with
-         | Some ""%string => None
-         | Some (String _ _ as domain) => Some (domain, ` b2, env'0)
-         | None => None
+         | Some ""%string => (OtherErrorInfo "Unknown (Domain Name)")
+         | Some (String _ _ as domain) => Ok (domain, ` b2, env'0)
+         | None => (OtherErrorInfo "Unknown (Domain Name)")
          end
         | right _ => (If wlt_dec labelheader WO~0~1~0~0~0~0~0~0
-          Then match weq labelheader (wzero 8) with
-               | in_left => Some (""%string, ` b1, env')
-               | right n =>
-                   `(label, b3, env'0) <- Decode_w_Measure_lt
-                                            (decode_string (wordToNat labelheader))
-                                            (` b1) env'
-                                            (decode_string_lt
-                                               (wordToNat labelheader)
-                                               (n_eq_0_lt labelheader n));
-                     Ifopt (index 0 "." label) as _ Then None
-                     Else (
-                     `(domain, b4, e3) <- g (` b3) (lt_B_trans x b1 b3) env'0;
-                       If (string_dec domain "") Then
-                          Some (label, b4, Ifopt (peekD cd) as curPtr Then addD_G e3 (label, curPtr)
-                                                                                 Else e3)
-                       Else Some (label ++ (String "." domain), b4,
-                                  Ifopt (peekD cd) as curPtr Then addD_G e3
-                                                             (label ++ (String "." domain), curPtr)
-                                                             Else e3))%string
-               end Else None) end).
+                         Then match weq labelheader (wzero 8) with
+                              | in_left => Ok (""%string, ` b1, env')
+                              | right n =>
+                                  `(label, b3, env'0) <- Decode_w_Measure_lt
+                                                           (decode_string (wordToNat labelheader))
+                                                           (` b1) env'
+                                                           (decode_string_lt
+                                                              (wordToNat labelheader)
+                                                              (n_eq_0_lt labelheader n));
+                      Ifopt (index 0 "." label) as _ Then (OtherErrorInfo "Unknown (Domain Name)")
+                                                     Else (
+                                                       `(domain, b4, e3) <- g (` b3) (lt_B_trans x b1 b3) env'0;
+                                                       If (string_dec domain "") Then
+                                                          Ok (label, b4, Ifopt (peekD cd) as curPtr Then addD_G e3 (label, curPtr)
+                                                                                                    Else e3)
+                                                          Else Ok (label ++ (String "." domain), b4,
+                                                                    Ifopt (peekD cd) as curPtr Then addD_G e3
+                                                                                               (label ++ (String "." domain), curPtr)
+                                                                                               Else e3))%string
+                      end Else (OtherErrorInfo "Unknown (Domain Name)")) end).
   Proof.
     intros; apply functional_extensionality; intros.
     repeat (f_equal; apply functional_extensionality; intros).
@@ -712,14 +712,14 @@ Section DomainName.
 
   Lemma Decode_w_Measure_le_eq'
     : forall (A B : Type) (cache : Cache) (monoid : Monoid B)
-             (A_decode : B -> CacheDecode -> option (A * B * CacheDecode))
+             (A_decode : B -> CacheDecode -> Hopefully (A * B * CacheDecode))
              (b : B) (cd : CacheDecode)
              (A_decode_le : forall (b0 : B) (cd0 : CacheDecode) (a : A) (b' : B) (cd' : CacheDecode),
-                 A_decode b0 cd0 = Some (a, b', cd') -> le_B b' b0)
+                 A_decode b0 cd0 = Ok (a, b', cd') -> le_B b' b0)
              (a' : A) (b' : B) (cd' : CacheDecode)
              pf,
-      Decode_w_Measure_le A_decode b cd A_decode_le = Some (a', pf, cd')
-      -> A_decode b cd = Some (a', `pf , cd').
+      Decode_w_Measure_le A_decode b cd A_decode_le = Ok (a', pf, cd')
+      -> A_decode b cd = Ok (a', `pf , cd').
   Proof.
     unfold Decode_w_Measure_le; intros.
     revert pf H.
@@ -731,14 +731,14 @@ Section DomainName.
 
   Lemma Decode_w_Measure_lt_eq'
     : forall (A B : Type) (cache : Cache) (monoid : Monoid B)
-             (A_decode : B -> CacheDecode -> option (A * B * CacheDecode))
+             (A_decode : B -> CacheDecode -> Hopefully (A * B * CacheDecode))
              (b : B) (cd : CacheDecode)
              (A_decode_lt : forall (b0 : B) (cd0 : CacheDecode) (a : A) (b' : B) (cd' : CacheDecode),
-                 A_decode b0 cd0 = Some (a, b', cd') -> lt_B b' b0)
+                 A_decode b0 cd0 = Ok (a, b', cd') -> lt_B b' b0)
              (a' : A) (b' : B) (cd' : CacheDecode)
              pf,
-      Decode_w_Measure_lt A_decode b cd A_decode_lt = Some (a', pf, cd')
-      -> A_decode b cd = Some (a', `pf , cd').
+      Decode_w_Measure_lt A_decode b cd A_decode_lt = Ok (a', pf, cd')
+      -> A_decode b cd = Ok (a', `pf , cd').
   Proof.
     unfold Decode_w_Measure_lt; intros.
     revert pf H.
@@ -911,7 +911,7 @@ Section DomainName.
   Lemma decode_word_add_ptr_OK
     : forall sz env xenv n env' b b' x x1 l,
       add_ptr_OK (l, n) env xenv
-      -> decode_word (sz := sz) b xenv = Some (x, b', x1)
+      -> decode_word (sz := sz) b xenv = Ok (x, b', x1)
       -> add_ptr_OK (l, n) env' x1.
   Proof.
     intros.
@@ -925,7 +925,7 @@ Section DomainName.
   Lemma decode_string_add_ptr_OK
     : forall n env xenv n' xenv'' b b' l l',
       add_ptr_OK (l', n') env xenv
-      -> decode_string n b xenv = Some (l, b', xenv'')
+      -> decode_string n b xenv = Ok (l, b', xenv'')
       -> add_ptr_OK (l', n') env xenv''.
   Proof.
     unfold add_ptr_OK in *; induction n; simpl; intros.
@@ -934,7 +934,7 @@ Section DomainName.
         destruct H0 as [? [? [? [? ?] ] ] ]; injections; subst.
       destruct (decode_string n x0 x1) eqn: ?; simpl in *; try discriminate.
       destruct p; destruct p; injections.
-      eapply IHn in Heqo; eauto.
+      eapply IHn in Heqh; eauto.
       unfold decode_ascii in H0.
       apply DecodeBindOpt2_inv in H0;
         destruct H0 as [? [? [? [? ?] ] ] ]; injections; subst.
@@ -1052,7 +1052,7 @@ Section DomainName.
 
   Lemma decode_word_peek_distinct
     : forall sz xenv xenv' b b' x,
-      decode_word (sz := sz) b xenv = Some (x, b', xenv')
+      decode_word (sz := sz) b xenv = Ok (x, b', xenv')
       -> peekD xenv' = peekD (addD xenv sz).
   Proof.
     intros.
@@ -1061,6 +1061,13 @@ Section DomainName.
     injections.
     reflexivity.
   Qed.
+
+  Definition hope2option {T} (h:Hopefully T) : option T:=
+    match h with
+    | Ok x => Some x
+    | Error e => None
+    end.
+    
 
   Lemma PeekCacheFixpoint_Overflow
     : forall
@@ -1080,27 +1087,27 @@ Section DomainName.
              (domain : DomainName) (env : CacheFormat) =>
            If string_dec domain "" Then format_ascii terminal_char env
               Else (position <- {position : option ({x | WO~1~0~1~1~1~1~1~1 < x} * word 8) |
-                        forall p : {x | WO~1~0~1~1~1~1~1~1 < x} * word 8,
-                          position = Some p -> In p (getE env domain)};
-            Ifopt position as position0
-                                Then `(ptr1b, env') <- format_word (` (fst position0)) env;
-            `(ptr2b, env'0) <- format_word (snd position0) env';
-            ret (mappend ptr1b ptr2b, env'0)
-                Else (`(label, domain') <- {labeldomain' :
-                                              string * string |
-                                            (domain = (fst labeldomain' ++ String "." (snd labeldomain'))%string \/
-                                             labeldomain' = (domain, ""%string)) /\
-                                            ValidLabel (fst labeldomain') /\
-                                            (forall label' post' : string,
-                                                domain = (label' ++ post')%string ->
-                                                ValidLabel label' ->
-                                                (String.length label' <= String.length (fst labeldomain'))%nat)};
-                        `(lenb, env') <- format_nat 8 (String.length label) env;
-                        `(labelb, env'0) <- format_string label env';
-                        `(domainb, env'1) <- format_DomainName domain' env'0;
-                        ret
-                          (mappend (mappend lenb labelb) domainb,
-                           Ifopt peekE env as curPtr Then addE_G env'1 (domain, curPtr) Else env'1)))) x6 xenv''
+                                  forall p : {x | WO~1~0~1~1~1~1~1~1 < x} * word 8,
+                                    position = Some p -> In p (getE env domain)};
+                    Ifopt position as position0
+                                        Then `(ptr1b, env') <- format_word (` (fst position0)) env;
+                    `(ptr2b, env'0) <- format_word (snd position0) env';
+                    ret (mappend ptr1b ptr2b, env'0)
+                        Else (`(label, domain') <- {labeldomain' :
+                                 string * string |
+                                                     (domain = (fst labeldomain' ++ String "." (snd labeldomain'))%string \/
+                                                        labeldomain' = (domain, ""%string)) /\
+                                                       ValidLabel (fst labeldomain') /\
+                                                       (forall label' post' : string,
+                                                           domain = (label' ++ post')%string ->
+                                                           ValidLabel label' ->
+                                                           (String.length label' <= String.length (fst labeldomain'))%nat)};
+                              `(lenb, env') <- format_nat 8 (String.length label) env;
+                              `(labelb, env'0) <- format_string label env';
+                              `(domainb, env'1) <- format_DomainName domain' env'0;
+                              ret
+                                (mappend (mappend lenb labelb) domainb,
+                                  Ifopt peekE env as curPtr Then addE_G env'1 (domain, curPtr) Else env'1)))) x6 xenv''
         ↝ (bin', xenv0) ->
       peekE xenv'' = None
       -> peekE xenv0 = None.
@@ -1228,7 +1235,6 @@ Section DomainName.
           injection H5; intros; subst.
           simpl; lia.
   Qed.
-
 
 
   Lemma PeekCacheFixpoint
@@ -1452,7 +1458,7 @@ Section DomainName.
 
   Lemma decode_string_peek_distinct
     : forall n xenv xenv' b b' l,
-      decode_string n b xenv = Some (l, b', xenv')
+      decode_string n b xenv = Ok (l, b', xenv')
       -> peekD xenv' = peekD (addD xenv (n * 8)).
   Proof.
     induction n; simpl; intros.
@@ -1465,7 +1471,7 @@ Section DomainName.
       apply DecodeBindOpt2_inv in H;
         destruct H as [? [? [? [? ?] ] ] ]; injections; subst.
       eapply decode_word_peek_distinct in H; eauto.
-      eapply IHn in Heqo; eauto; rewrite Heqo.
+      eapply IHn in Heqh; eauto; rewrite Heqh.
       destruct (peekD xenv) eqn: peekD_eq.
       + destruct (Compare_dec.lt_dec (1 + n + pointerT2Nat p) (pow2 14)).
         * destruct (addPeekSome _ 1 _ peekD_eq) as [p' [? ?] ]; try lia.
@@ -1950,8 +1956,8 @@ Section DomainName.
                 rewrite <- l_eq'; eauto.
                 rewrite !length_append; simpl; lia.
                 destruct (getD xenv7 p) eqn: ?; auto.
-                rewrite get_correct in Heqo; eauto.
-                eapply xenv'0_OK in Heqo; intuition eauto.
+                rewrite get_correct in Heqh; eauto.
+                eapply xenv'0_OK in Heqh; intuition eauto.
                 assert (~ In p (getE env s)).
                 { rewrite <- get_correct by eauto; intro.
                   eapply P_OK in Heqy; eauto.
@@ -2140,8 +2146,8 @@ Section DomainName.
                 apply P_OK; intuition eauto.
                 destruct l; simpl; intuition.
                 destruct (getD xenv7 p) eqn: ?; auto.
-                rewrite get_correct in Heqo; eauto.
-                eapply xenv'0_OK in Heqo; intuition eauto.
+                rewrite get_correct in Heqh; eauto.
+                eapply xenv'0_OK in Heqh; intuition eauto.
                 assert (~ In p (getE env s)).
                 { rewrite <- get_correct by eauto; intro.
                   eapply P_OK in Heqy; eauto.
@@ -2336,7 +2342,7 @@ Section DomainName.
             elimtype False; eapply NonEmpty_String_wordToNat; eauto.
             lia.
             destruct (getD x8 p) eqn: ?; eauto.
-            rewrite get_correct in Heqo; eauto.
+            rewrite get_correct in Heqh; eauto.
             eapply InCacheFixpoint in H4; eauto.
             destruct H4.
             destruct (fun H => in_dec H p (getE xenv'' s)).
@@ -2413,7 +2419,7 @@ Section DomainName.
             eapply WordFacts.wordToNat_lt in w; simpl in w; lia.
             destruct x3; simpl; lia.
             destruct (getD x8 p) eqn: ?; eauto.
-            rewrite get_correct in Heqo; eauto.
+            rewrite get_correct in Heqh; eauto.
             eapply InCacheFixpoint in H4; eauto.
             destruct H4.
             destruct (fun H => in_dec H p (getE xenv'' s)).
@@ -2574,8 +2580,8 @@ Section DomainName.
           destruct (peekD env') eqn: ?; simpl in *; eauto.
           apply add_correct_G.
           eauto.
-          destruct (getD x8 p) eqn: Heqo; eauto.
-          rewrite get_correct in Heqo by eauto.
+          destruct (getD x8 p) eqn: Heqh; eauto.
+          rewrite get_correct in Heqh by eauto.
           eapply InCacheFixpoint in H4; eauto; intuition.
           destruct (fun H => in_dec H p (getE xenv'' s)).
           apply pointerT_eq_dec .
@@ -2611,8 +2617,8 @@ Section DomainName.
           destruct (peekD env') eqn: ?; simpl in *; eauto.
           apply add_correct_G.
           eauto.
-          destruct (getD x8 p) eqn: Heqo; eauto.
-          rewrite get_correct in Heqo by eauto.
+          destruct (getD x8 p) eqn: Heqh; eauto.
+          rewrite get_correct in Heqh by eauto.
           eapply InCacheFixpoint in H4; eauto; intuition.
           destruct (fun H => in_dec H p (getE xenv'' s)).
           apply pointerT_eq_dec .

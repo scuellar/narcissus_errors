@@ -26,37 +26,37 @@ Section ComposeFormat.
              (decode : DecodeM S' T)
              (g : S' -> S) (* Transformation Function *)
     : DecodeM S T  :=
-    fun b env => `(s, env') <- decode b env; Some (g s, env').
+    fun b env => `(s, env') <- decode b env; Ok (g s, env').
 
   Definition Compose_Decode' {S' : Type}
              (decode : DecodeM S' T)
-             (g : S' -> option S) (* Transformation Function *)
+             (g : S' -> Hopefully S) (* Transformation Function *)
     : DecodeM S T  :=
-    fun b env => `(s', env') <- decode b env; match g s' with Some s => Some (s, env') | None => None end.
+    fun b env => `(s', env') <- decode b env; match g s' with Ok s => Ok (s, env') | Error e => Error e end.
 
   Definition Compose_Encode
              {S' : Type}
              (encode : EncodeM S' T)
-             (f' : S -> option S')
+             (f' : S -> Hopefully S')
     : EncodeM S T :=
-    fun s => Ifopt f' s as s' Then encode s' Else fun _ => None.
+    fun s c => HBind f' s as s' With encode s' c.
 
   Lemma CorrectEncoder_Compose
         (format : FormatM S' T)
         (encode : EncodeM S' T)
         (f : S -> S' -> Prop)
-        (f' : S -> option S')
+        (f' : S -> Hopefully S')
         (f'_refines_f_1 :
            forall s s',
-             f' s = Some s' ->
+             f' s = Ok s' ->
              f s s')
         (f'_refines_f_2 :
            forall s,
-             f' s = None ->
+             is_error (f' s) ->
              forall s', ~ f s s')
         (f'_sound_choice :
            forall s s',
-             f' s = Some s' ->
+             f' s = Ok s' ->
              forall x env benv,
                format x env ∋ benv
                -> f s x
@@ -69,9 +69,10 @@ Section ComposeFormat.
       destruct (f' a) eqn: ?; simpl in *; try discriminate.
       eapply H in H0; eexists; intuition eauto.
     - rewrite unfold_computes; intro;  destruct_ex; split_and.
-      destruct (f' a) eqn: ?; simpl in *; try discriminate.
-      eapply H4; eauto.
-      eapply f'_refines_f_2; eauto.
+      destruct (f' a) eqn: ?; simpl in *.
+      + eapply H4; eauto.
+      + eapply f'_refines_f_2; eauto.
+       rewrite Heqh; constructor.
   Qed.
 
 End ComposeFormat.
@@ -95,11 +96,13 @@ Section ComposeSpecializations.
             (P : S -> Prop)
             (decideable_P : DecideableEnsemble P)
     : CorrectEncoder format encode
-      -> CorrectEncoder (Restrict_Format P format) (fun s => if (DecideableEnsembles.dec s) then encode s else fun _ => None).
+      -> CorrectEncoder
+           (Restrict_Format P format)
+           (fun s => if (DecideableEnsembles.dec s) then encode s else fun _ => Error DecideableEnsembles).
   Proof.
     intros; replace
-              (fun s : S => if DecideableEnsembles.dec s then encode s else fun _ : CacheFormat => None)
-              with (Compose_Encode encode (fun s => if DecideableEnsembles.dec s then Some s else None)).
+              (fun s : S => if DecideableEnsembles.dec s then encode s else fun _ : CacheFormat => Error DecideableEnsembles)
+              with (Compose_Encode encode (fun s => if DecideableEnsembles.dec s then Ok s else Error DecideableEnsembles)).
     eapply CorrectEncoder_Compose; intros;
       try (destruct (DecideableEnsembles.dec s) eqn: ?; first [discriminate | injections]);
       intuition eauto.
@@ -137,7 +140,7 @@ Section ComposeSpecializations.
   Proof.
     intros; replace
               (compose encode g)
-              with (Compose_Encode encode (fun s => Some (g s))).
+              with (Compose_Encode encode (fun s => Ok (g s))).
     eapply CorrectEncoder_Compose; intros;
       try (destruct (DecideableEnsembles.dec s') eqn: ?; first [discriminate | injections]);
       intuition eauto.
@@ -260,7 +263,7 @@ Lemma injection_decode_correct' {S V V' T}
       {cache : Cache}
       {P : CacheDecode -> Prop}
       {monoid : Monoid T}
-      (inj : V -> option V')
+      (inj : V -> Hopefully V')
       (Source_Predicate : S -> Prop)
       (View_Predicate : V -> Prop)
       (View'_Predicate : V' -> Prop)
@@ -272,17 +275,17 @@ Lemma injection_decode_correct' {S V V' T}
       (decode_V : DecodeM (V * T) T)
       (decode_V_OK : CorrectDecoder monoid Source_Predicate View_Predicate
                                     view format decode_V P view_format)
-      (view'_OK : forall s v, Source_Predicate s -> view s v -> exists v', inj v = Some v' /\ view' s v')
+      (view'_OK : forall s v, Source_Predicate s -> view s v -> exists v', inj v = Ok v' /\ view' s v')
       (View'_Predicate_OK : forall v, View_Predicate v
-                                 -> forall v', inj v = Some v' -> View'_Predicate v')
+                                 -> forall v', inj v = Ok v' -> View'_Predicate v')
       (view'_format_OK : forall v env t,
           computes_to (view_format v env) t
-          -> forall v', inj v = Some v' -> computes_to (view'_format v' env) t)
+          -> forall v', inj v = Ok v' -> computes_to (view'_format v' env) t)
   : CorrectDecoder monoid Source_Predicate View'_Predicate
                    view'
                    format (Compose_Decode' decode_V (fun s => match inj (fst s) with
-                                                           | Some s' => Some (s', snd s)
-                                                           | None => None
+                                                           | Ok s' => Ok (s', snd s)
+                                                           | Error e => Error e 
                                                            end))
                    P view'_format.
 Proof.
@@ -296,7 +299,7 @@ Proof.
   { destruct (decode_V t env') as [ [ [? ?] ?] |] eqn: ? ;
       simpl in *; try discriminate; destruct inj eqn:?; try discriminate; injections.
     apply proj2 in decode_V_OK;
-      eapply decode_V_OK in Heqo; eauto.
+      eapply decode_V_OK in Heqh; eauto.
     intuition; destruct_ex; split_and; eexists _, _; intuition eauto.
   }
 Qed.
@@ -328,7 +331,7 @@ Lemma injection_decode_correct {S V V' T}
                    format (Compose_Decode decode_V (fun s => (inj (fst s), snd s)))
                    P view'_format.
 Proof.
-  eapply (injection_decode_correct' (fun v => Some (inj v)));
+  eapply (injection_decode_correct' (fun v => Ok (inj v)));
     intuition eauto; injections; intuition eauto.
 Qed.
 
@@ -337,23 +340,23 @@ Lemma bijection_decode_correct' {S V T}
       {P : CacheDecode -> Prop}
       {monoid : Monoid T}
       (proj : S -> V)
-      (inj : V -> option S)
+      (inj : V -> Hopefully S)
       (Source_Predicate : S -> Prop)
       (View_Predicate : V -> Prop)
       (view_format : FormatM V T)
       (decode_V : DecodeM (V * T) T)
       (decode_V_OK : CorrectDecoder monoid View_Predicate View_Predicate
                                     eq view_format decode_V P view_format)
-      (view_OK : forall s, Source_Predicate s -> inj (proj s) = Some s)
-      (view_OK' : forall v s, inj v = Some s -> proj s = v)
+      (view_OK : forall s, Source_Predicate s -> inj (proj s) = Ok s)
+      (view_OK' : forall v s, inj v = Ok s -> proj s = v)
       (View_Predicate_OK : forall s, Source_Predicate s -> View_Predicate (proj s))
-      (View_Predicate_OK' : forall v s, View_Predicate v -> inj v = Some s -> Source_Predicate s)
+      (View_Predicate_OK' : forall v s, View_Predicate v -> inj v = Ok s -> Source_Predicate s)
   : CorrectDecoder monoid Source_Predicate Source_Predicate
                    eq
                    (Projection_Format view_format proj)
                    (Compose_Decode' decode_V (fun s => match inj (fst s) with
-                                                    | Some s' => Some (s', snd s)
-                                                    | None => None
+                                                    | Ok s' => Ok (s', snd s)
+                                                    | Error e => Error e
                                                     end))
                    P
                    (Projection_Format view_format proj).
@@ -389,7 +392,7 @@ Lemma bijection_decode_correct {S V T}
                    P
                    (Projection_Format view_format proj).
 Proof.
-  eapply (bijection_decode_correct' _ (fun v => Some (inj v)));
+  eapply (bijection_decode_correct' _ (fun v => Ok (inj v)));
     intuition eauto; injections; f_equal; intuition eauto.
 Qed.
 
@@ -403,6 +406,7 @@ Ltac derive_decoder_equiv :=
          | |- context[If_Opt_Then_Else ?x _ _] => tac x
          | |- context[If_Then_Else ?x _ _] => tac x
          | |- context[if ?x then _ else _] => tac x
+         | |- context[hbind ?x _] => tac x
          end.
 
 Ltac _apply_bijection_rule tac :=

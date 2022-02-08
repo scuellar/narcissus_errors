@@ -22,18 +22,18 @@ Section EnqueueFormat.
   Definition Enqueue_Decode
     : DecodeM (S * T) T :=
     fun t env =>
-      Ifopt dequeue_opt t as st Then Some (st, env) Else None.
+      Ifopt dequeue_opt t as st Then Ok (st, env) Else (Error (InfoError "While dequeuing" EndOfBuffer)).
 
   Definition Enqueue_Encode
     : EncodeM S T :=
-    fun a env => Some (enqueue_opt a mempty, env).
+    fun a env => Ok (enqueue_opt a mempty, env).
 
   Lemma CorrectEncoder_Enqueue
     : CorrectEncoder Enqueue_Format Enqueue_Encode.
   Proof.
     unfold CorrectEncoder, Enqueue_Encode, Enqueue_Format in *; split; intros.
     - injections; computes_to_econstructor.
-    - discriminate.
+    - inversion H.
   Qed.
 
   (* Lemma CorrectDecoder_Enqueue

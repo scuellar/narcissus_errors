@@ -37,17 +37,17 @@ Section Delimiter.
   (* TODO: it is faster to take the size of [open]. *)
   Definition decode_delimiter
              (decode_with_term :
-               string -> T -> CacheDecode -> option (A * T * CacheDecode))
+               string -> T -> CacheDecode -> Hopefully (A * T * CacheDecode))
              (b : T) (cd : CacheDecode)
-    : option (A * T * CacheDecode) :=
+    : Hopefully (A * T * CacheDecode) :=
     `(s, b1, e1) <- decode_string (length open) b cd;
     if String.eqb open s
     then decode_with_term close b1 e1
-    else None.
+    else OtherErrorInfo ("Open delimiter: Expected " ++ open ++ " but found " ++ s).
 
   Theorem delimiter_decode_correct
           (decode_A_with_term
-            : string -> T -> CacheDecode -> option (A * T * CacheDecode))
+            : string -> T -> CacheDecode -> Hopefully (A * T * CacheDecode))
           (A_predicate : string -> A -> Prop)
     : CorrectDecoder monoid (A_predicate close) (A_predicate close)
                      eq (format_with_term close)
@@ -64,7 +64,7 @@ Section Delimiter.
                      format_delimiter.
   Proof.
     intros decode_A_OK.
-    eapply format_decode_correct_EquivDecoder_Proper; cycle 1.
+    eapply format_decode_correct_EquivDecoderOk; cycle 1.
     - unfold format_delimiter.
       eapply format_decode_correct_refineEquiv; unfold flip.
 
@@ -88,17 +88,23 @@ Section Delimiter.
 
       repeat instantiate (1:=constant True); split; eauto.
 
-    - intros t cd.
+    - econstructor.
       unfold sequence_Decode.
       unfold decode_delimiter.
-      eapply DecodeBindOpt2_under_bind.
-      intros.
-      destruct String.eqb; subst; simpl;
-        destruct decode_A_with_term; destruct_conjs; reflexivity.
+      destruct (decode_string (length open) t c) as [((?&?)&?)|]; eauto.
+      unfold DecodeBindOpt2, BindOpt, hbind.
+      destruct (open =? s)%string; auto.
+      + destruct (decode_A_with_term close t0 c0); eauto.
+        destruct p; simpl.
+        destruct p; auto.
+      + right.
+        destruct (decode_A_with_term close t0 c) as [((?&?)&?)|];
+          repeat econstructor.
+        all: break_match; eauto; constructor.
   Qed.
 
 
-  Variable decode_A : T -> CacheDecode -> option (A * T * CacheDecode).
+  Variable decode_A : T -> CacheDecode -> Hopefully (A * T * CacheDecode).
   Variable A_predicate : A -> Prop.
   Variable decode_A_OK : CorrectDecoder monoid A_predicate A_predicate
                                         eq format_A
@@ -107,14 +113,15 @@ Section Delimiter.
                                         format_A.
 
   (* TODO: again, we should take the size of [close]. *)
+
   Definition decode_with_term_simple (close : string)
              (b : T) (cd : CacheDecode)
-    : option (A * T * CacheDecode) :=
+    : Hopefully (A * T * CacheDecode) :=
     `(a, b1, e1) <- decode_A b cd;
     `(s, b2, e2) <- decode_string (length close) b1 e1;
     if String.eqb close s
-    then Some (a, b2, e2)
-    else None.
+    then Ok (a, b2, e2)
+    else OtherErrorInfo ("Close delimiter: Expected " ++ close ++ " but found " ++ s).
 
   Theorem decode_with_term_simple_correct
     : CorrectDecoder monoid A_predicate A_predicate
@@ -123,7 +130,7 @@ Section Delimiter.
                      A_cache_inv
                      (format_with_term close).
   Proof.
-    eapply format_decode_correct_EquivDecoder_Proper; cycle 1.
+    eapply format_decode_correct_EquivDecoderOk; cycle 1.
     - unfold format_with_term.
       eapply format_decode_correct_refineEquiv; unfold flip.
 
@@ -146,12 +153,14 @@ Section Delimiter.
 
       repeat instantiate (1:=constant True); split; eauto.
 
-    - intros t cd.
+    - econstructor.
       unfold sequence_Decode.
       unfold decode_with_term_simple.
-      eapply DecodeBindOpt2_under_bind. intros.
-      eapply DecodeBindOpt2_under_bind. intros.
-      destruct String.eqb; subst; simpl; reflexivity.
+      destruct (decode_A t c) as [((?&?)&?)|]; eauto.
+      unfold DecodeBindOpt2, BindOpt, hbind.
+      destruct (decode_string (length close) t0 c0)  as [((?&?)&?)|]; auto.
+      destruct (close =? s)%string; eauto.
+      right; repeat econstructor.
   Qed.
 
   Definition decode_delimiter_simple :=

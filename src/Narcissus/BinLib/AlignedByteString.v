@@ -1359,9 +1359,9 @@ Defined.
 
 Lemma DecodeBindOpt_assoc:
   forall (A B C D : Type)
-         (a_opt : option (A * B))
-         (f : A -> B -> option (C * B))
-         (g : C -> B -> option (D * B)),
+         (a_opt : Hopefully (A * B))
+         (f : A -> B -> Hopefully (C * B))
+         (g : C -> B -> Hopefully (D * B)),
     (`(c, b) <- (`(a, b) <- a_opt; f a b); g c b) =
     (`(a, b) <- a_opt;
        `(c, b) <- f a b;
@@ -1373,7 +1373,7 @@ Proof.
 Qed.
 
 Lemma DecodeBindOpt_under_bind:
-  forall (A B C : Type) (a_opt : option (A * B)) (f f' : A -> B -> option (C * B)),
+  forall (A B C : Type) (a_opt : Hopefully (A * B)) (f f' : A -> B -> Hopefully (C * B)),
     (forall (a : A) (b : B), f a b = f' a b) -> (`(a, b) <- a_opt;
                                                    f a b ) = (`(a, b) <- a_opt;
                                                                 f' a b).
@@ -1392,7 +1392,7 @@ Lemma aligned_decode_char_eq
       {numBytes}
   : forall (v : ByteBuffer.t (S numBytes)),
     WordOpt.decode_word' (monoidUnit := ByteString_QueueMonoidOpt) 8 (build_aligned_ByteString v)
-    = Some (Vector.hd v, build_aligned_ByteString (Vector.tl v)).
+    = Ok (Vector.hd v, build_aligned_ByteString (Vector.tl v)).
 Proof.
   simpl; intros.
   etransitivity.
@@ -1480,16 +1480,16 @@ Qed.
 
 Lemma Some_eq_rect_eq
   : forall n m w H b,
-    eq_rect n (fun n : nat => option (word n * ByteString)) (Some  (w, b)) m H
-    = Some (eq_rect n word w _ H, b).
+    eq_rect n (fun n : nat => Hopefully (word n * ByteString)) (Ok  (w, b)) m H
+    = Ok (eq_rect n word w _ H, b).
 Proof.
   destruct H; simpl; reflexivity.
 Qed.
 
 Lemma None_eq_rect_eq
-  : forall n m H,
-    eq_rect n (fun n : nat => option (word n * ByteString)) (None) m H
-    = None.
+  : forall n m H e,
+    eq_rect n (fun n : nat => Hopefully (word n * ByteString)) (Error e) m H
+    = Error e.
 Proof.
   destruct H; simpl; reflexivity.
 Qed.
@@ -1507,7 +1507,7 @@ Qed.
 
 Lemma eq_rect_decode_word
   : forall n m H b,
-    eq_rect n (fun n0 : nat => option (word n0 * ByteString)) (decode_word' n b) m H =
+    eq_rect n (fun n0 : nat => Hopefully (word n0 * ByteString)) (decode_word' n b) m H =
     decode_word' m b.
 Proof.
   induction n; simpl; intros; subst; simpl.
@@ -1518,7 +1518,7 @@ Qed.
 Lemma decode_word_plus : forall n m (v : ByteString),
     WordOpt.decode_word' (n + m) v =
     (`(w, v') <- WordOpt.decode_word' (m + n) v;
-       Some (eq_rect _ word w _ (Plus.plus_comm _ _), v')).
+       Ok (eq_rect _ word w _ (Plus.plus_comm _ _), v')).
 Proof.
   induction n; simpl; intros.
   - revert v; induction m; simpl; intros.
@@ -1533,7 +1533,7 @@ Proof.
     set_evars; rewrite IHn, !DecodeBindOpt_assoc.
     unfold H; reflexivity.
     simpl; replace (WordOpt.decode_word' (m + S n) v) with
-               (`(w', v') <- WordOpt.decode_word' (S (m + n)) v; Some (eq_rect _ word w' _ (plus_n_Sm _ _), v')).
+               (`(w', v') <- WordOpt.decode_word' (S (m + n)) v; Ok (eq_rect _ word w' _ (plus_n_Sm _ _), v')).
     + simpl; repeat (rewrite !DecodeBindOpt_assoc; apply DecodeBindOpt_under_bind; intros).
       simpl; repeat f_equal;  erewrite SW_word_eq_rect_eq; rewrite <- transport_pp; f_equal.
     + simpl; rewrite !DecodeBindOpt_assoc.
@@ -1548,9 +1548,9 @@ Proof.
       setoid_rewrite DecodeBindOpt_assoc in H; simpl.
       destruct (decode_word' (m + n) b0) as [ [? ?] | ]; simpl in *.
       assert (n + S m = m + S n) by lia.
-      assert (eq_rect _ (fun n => option (word n * ByteString)) (decode_word' (n + S m) v) (m + S n) H0
-              = eq_rect _ (fun n => option (word n * ByteString))
-                        (Some (eq_rect (S (m + n)) word (SW_word b w) (n + S m) (plus_comm (S m) n), b1))
+      assert (eq_rect _ (fun n => Hopefully (word n * ByteString)) (decode_word' (n + S m) v) (m + S n) H0
+              = eq_rect _ (fun n => Hopefully (word n * ByteString))
+                        (Ok (eq_rect (S (m + n)) word (SW_word b w) (n + S m) (plus_comm (S m) n), b1))
                         (m + S n) H0)
         by (intros; rewrite H; reflexivity).
       rewrite Some_eq_rect_eq in H1.
@@ -1576,7 +1576,7 @@ Lemma aligned_decode_char_eq'
   : forall (v : ByteBuffer.t (S numBytes' + numBytes)),
     WordOpt.decode_word' (monoidUnit := ByteString_QueueMonoidOpt) (8 * (S numBytes')) (build_aligned_ByteString v)
     = let (v', v'') := Vector_split (S numBytes') numBytes v in
-      Some (VectorByteToWord v', build_aligned_ByteString v'').
+      Ok (VectorByteToWord v', build_aligned_ByteString v'').
 Proof.
   induction numBytes'.
   - intros; rewrite aligned_decode_char_eq.
@@ -1588,46 +1588,46 @@ Proof.
     match goal with
       |- ?k = _ =>
       replace k
-      with (`(w, v') <-  Some (Vector.hd v, build_aligned_ByteString (Vector.tl v));
+      with (`(w, v') <-  Ok (Vector.hd v, build_aligned_ByteString (Vector.tl v));
             `(w', v'') <- WordOpt.decode_word' (8 * n) v';
-            Some (eq_rect _ word (Core.append_word w' w) _ (sym_eq (NPeano.Nat.mul_succ_r _ _)), v''))
+            Ok (eq_rect _ word (Core.append_word w' w) _ (sym_eq (NPeano.Nat.mul_succ_r _ _)), v''))
     end.
     simpl.
     rewrite IHnumBytes'; simpl.
     destruct (Vector_split n numBytes (Vector.tl v)); simpl; repeat f_equal; clear.
-    unfold DecodeBindOpt at 1; unfold BindOpt, If_Opt_Then_Else.
+    unfold DecodeBindOpt at 1; unfold hbind, BindOpt, If_Opt_Then_Else, hbind.
     assert (8 + 8 * n = 8 * S n) by lia.
     rewrite <- eq_rect_decode_word with (H := H).
     assert (8 * n + 8 = 8 + 8 * n) by lia.
     match goal with
       |- context [decode_word' ?m (build_aligned_ByteString ?b) ] =>
       replace (decode_word' m (build_aligned_ByteString b))
-      with (`(w, v') <- Some (hd b, build_aligned_ByteString (tl b));
+      with (`(w, v') <- Ok (hd b, build_aligned_ByteString (tl b));
             `(w', v'') <- decode_word' (8 * n) v';
-            Some (eq_rect _ word (append_word w' w) _ H0, v''))
+            Ok (eq_rect _ word (append_word w' w) _ H0, v''))
     end.
-    unfold DecodeBindOpt at 2; unfold BindOpt, If_Opt_Then_Else.
-    destruct (decode_word' (8 * n) (build_aligned_ByteString (tl v))) as [ [? ?] | ]; try reflexivity.
-    unfold DecodeBindOpt, If_Opt_Then_Else, BindOpt; simpl.
-    rewrite Some_eq_rect_eq.
-    rewrite <- transport_pp.
-    repeat f_equal.
-    apply Eqdep_dec.eq_proofs_unicity; try intros; lia.
-    simpl; symmetry; apply None_eq_rect_eq.
-    rewrite <- aligned_decode_char_eq.
-    simpl.
-    repeat (rewrite !DecodeBindOpt_assoc; simpl; apply DecodeBindOpt_under_bind; intros).
-    clear.
-    repeat f_equal.
-    simpl in H0.
-    revert a7 H0; generalize (n + (n + (n + (n + (n + (n + (n + (n + 0)))))))); clear; intros n0 w.
-    induction w; simpl; intros.
-    symmetry.
-    apply Eqdep_dec.eq_rect_eq_dec; eauto using Peano_dec.eq_nat_dec.
-    erewrite <- IHw; clear.
-    erewrite WS_eq_rect_eq; reflexivity.
-    Unshelve.
-    lia.
+    + unfold DecodeBindOpt at 2; unfold hbind, BindOpt, If_Opt_Then_Else, hbind.
+      destruct (decode_word' (8 * n) (build_aligned_ByteString (tl v))) as [ [? ?] | ]; try reflexivity.
+      unfold hbind, DecodeBindOpt, If_Opt_Then_Else, BindOpt, hbind; simpl.
+      rewrite Some_eq_rect_eq.
+      rewrite <- transport_pp.
+      repeat f_equal.
+      apply Eqdep_dec.eq_proofs_unicity; try intros; lia.
+      simpl; symmetry; apply None_eq_rect_eq.
+    + rewrite <- aligned_decode_char_eq.
+      simpl.
+      repeat (rewrite !DecodeBindOpt_assoc; simpl; apply DecodeBindOpt_under_bind; intros).
+      clear.
+      repeat f_equal.
+      simpl in H0.
+      revert a7 H0; generalize (n + (n + (n + (n + (n + (n + (n + (n + 0)))))))); clear; intros n0 w.
+      induction w; simpl; intros.
+      symmetry.
+      apply Eqdep_dec.eq_rect_eq_dec; eauto using Peano_dec.eq_nat_dec.
+      erewrite <- IHw; clear.
+      erewrite WS_eq_rect_eq; reflexivity.
+      Unshelve.
+      lia.
 Qed.
 
 Definition LetIn {A B} (a : A) (k : A -> B) : B := let a' := a in k a'.

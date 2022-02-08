@@ -149,8 +149,8 @@ Qed.
 Lemma optimize_if_bind2 {A A' B C C'}
   : forall (a a' : C')
            (f : {a = a'} + {a <> a'})
-           (t e : option (A * B * C))
-           (k : A -> B -> C -> option (A' * B * C)),
+           (t e : Hopefully (A * B * C))
+           (k : A -> B -> C -> Hopefully (A' * B * C)),
     (`(a, b, env) <- (if f then t else e); k a b env) =
     if f then `(a, b, env) <- t; k a b env else `(a, b, env) <- e; k a b env.
 Proof.
@@ -159,8 +159,8 @@ Qed.
 
 Lemma optimize_if_bind2_bool {A A' B C}
   : forall (c : bool)
-           (t e : option (A * B * C))
-           (k : A -> B -> C -> option (A' * B * C)),
+           (t e : Hopefully (A * B * C))
+           (k : A -> B -> C -> Hopefully (A' * B * C)),
     (`(a, b, env) <- (if c then t else e); k a b env) =
     if c then `(a, b, env) <- t; k a b env else `(a, b, env) <- e; k a b env.
 Proof.
@@ -183,9 +183,9 @@ Qed.
 
 Lemma optimize_if_bind2_opt {A A' B C D}
   : forall (d_opt : option D)
-           (t : D -> option (A * B * C))
-           (e : option (A * B * C))
-           (k : A -> B -> C -> option (A' * B * C)),
+           (t : D -> Hopefully (A * B * C))
+           (e : Hopefully (A * B * C))
+           (k : A -> B -> C -> Hopefully (A' * B * C)),
     (`(a, b, env) <- (If_Opt_Then_Else d_opt t e); k a b env) =
     If_Opt_Then_Else d_opt (fun d => `(a, b, env) <- t d; k a b env) (`(a, b, env) <- e; k a b env).
 Proof.
@@ -202,9 +202,9 @@ Proof.
 Qed.
 
 Lemma DecodeBindOpt2_under_bind':
-  forall (S T V D E : Type) (a_opt : option (S * T * D)) (f f' : S -> T -> D -> option (V * E * D)),
+  forall (S T V D E : Type) (a_opt : Hopefully (S * T * D)) (f f' : S -> T -> D -> Hopefully (V * E * D)),
     (forall (a : S) (b : T) (d : D),
-        a_opt = Some (a, b, d)
+        a_opt = Ok (a, b, d)
         -> f a b d = f' a b d)
     -> (`(a, b, env) <- a_opt;
           f a b env) = (`(a, b, env) <- a_opt;

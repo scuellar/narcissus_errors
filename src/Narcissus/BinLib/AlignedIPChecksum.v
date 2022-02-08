@@ -31,7 +31,7 @@ Require Import
 Require Import Bedrock.Word.
 
 Definition decode_IPChecksum
-  : ByteString -> CacheDecode -> option (() * ByteString * CacheDecode) :=
+  : ByteString -> CacheDecode -> Hopefully (() * ByteString * CacheDecode) :=
   decode_unused_word (sz := 16).
 
 Definition encode_word {sz} (w : word sz) : ByteString :=
@@ -322,7 +322,7 @@ Lemma compose_PseudoChecksum_format_correct' {A}
     (forall a, NPeano.modulo (len_format_A a) 8 = 0)
     -> (forall a, NPeano.modulo (len_format_B a) 8 = 0)
     ->
-    forall decodeA : _ -> CacheDecode -> option (A * _ * CacheDecode),
+    forall decodeA : _ -> CacheDecode -> Hopefully (A * _ * CacheDecode),
       (cache_inv_Property P P_inv ->
        CorrectDecoder monoid predicate predicate eq (format_A ++ format_unused_word 16 ++ format_B)%format decodeA P (format_A ++ format_unused_word 16 ++ format_B)%format) ->
       (cache_inv_Property P P_invM ->
@@ -333,7 +333,7 @@ Lemma compose_PseudoChecksum_format_correct' {A}
                                 decode_measure P
                                 format_measure) ->
       (Prefix_Format _ (format_A ++ format_unused_word 16 ++ format_B) subformat)%format->
-      CorrectDecoder monoid predicate predicate eq
+      forall e, CorrectDecoder monoid predicate predicate eq
                      (format_A ThenChecksum (Pseudo_Checksum_Valid srcAddr destAddr udpLength protoCode) OfSize 16 ThenCarryOn format_B)
                      (fun (bin : _) (env : CacheDecode) =>
                           `(n, _, _) <- decode_measure bin env;
@@ -341,7 +341,7 @@ Lemma compose_PseudoChecksum_format_correct' {A}
                                                        to_list srcAddr ++ to_list destAddr ++ to_list (splitLength udpLength)
                                                        ++(ByteString2ListOfChar (n * 8) bin))%list) (wones 16) then
                               decodeA bin env
-                            else None)
+                            else Error e)
                      P
                      (format_A ThenChecksum (Pseudo_Checksum_Valid srcAddr destAddr udpLength protoCode) OfSize 16 ThenCarryOn format_B).
 Proof.
@@ -382,7 +382,7 @@ Proof.
        - eapply Pseudo_Checksum_Valid_bounded; eauto. }
   all: try unfold flip, pointwise_relation, impl;
     intuition eauto using EquivFormat_reflexive.
-    instantiate (1 := fun (n : nat) a =>
+    instantiate (2 := fun (n : nat) a =>
                     weq
        (onesComplement
           (wzero 8
@@ -392,18 +392,21 @@ Proof.
        (wones 16)).
   unfold Compose_Decode.
   Local Opaque Nat.div.
-  destruct (decode_measure a a0) as [ [ [? ?] ? ] | ]; simpl; eauto.
+  intros ??.
+  destruct (decode_measure t c) as [ [ [? ?] ? ] | ]; simpl; eauto.
   symmetry.
   find_if_inside.
-  eapply weqb_true_iff in e; rewrite e; eauto.
+  eapply weqb_true_iff in e0; rewrite e0; eauto.
   destruct (weqb
       (add_bytes_into_checksum (wzero 8) protoCode
          (onesComplement
             (to_list srcAddr ++
-             to_list destAddr ++ split2 8 8 udpLength :: (split1 8 8 udpLength :: ByteString2ListOfChar (n * 8) a)%list)))
+             to_list destAddr ++ split2 8 8 udpLength :: (split1 8 8 udpLength :: ByteString2ListOfChar (n * 8) t)%list)))
       WO~1~1~1~1~1~1~1~1~1~1~1~1~1~1~1~1) eqn: ? ; eauto.
   eapply weqb_true_iff in Heqb0.
   congruence.
+  Unshelve.
+  constructor.
 Qed.
 
 Fixpoint aligned_Pseudo_checksum
@@ -651,7 +654,7 @@ Ltac destruct_unit :=
 
 Ltac solve_seq_padding :=
   repeat (intros; match goal with
-                  | H : sequence_Encode ?e1 ?e2 _ _ = Some (?t, _) |- padding ?t = 0 =>
+                  | H : sequence_Encode ?e1 ?e2 _ _ = Ok (?t, _) |- padding ?t = 0 =>
                     eapply sequence_Encoding_padding_0 in H; eauto
                   end).
 
@@ -667,13 +670,13 @@ Lemma EncodeMEquivAlignedEncodeMForChecksum
       (enc2_OK : EncodeMEquivAlignedEncodeM enc2' enc2)
       (enc3_OK : EncodeMEquivAlignedEncodeM enc3' enc3)
       (encA_OK : forall a, EncodeMEquivAlignedEncodeM (encA' a) (encA a))
-      (enc1'_aligned : forall s ce t ce', enc1' s ce = Some (t, ce') -> padding t = 0)
-      (enc2'_aligned : forall s ce t ce', enc2' s ce = Some (t, ce') -> padding t = 0)
-      (enc3'_aligned : forall s ce t ce', enc3' s ce = Some (t, ce') -> padding t = 0)
-      (encA'_aligned : forall a s ce t ce', encA' a s ce = Some (t, ce') -> padding t = 0)
+      (enc1'_aligned : forall s ce t ce', enc1' s ce = Ok (t, ce') -> padding t = 0)
+      (enc2'_aligned : forall s ce t ce', enc2' s ce = Ok (t, ce') -> padding t = 0)
+      (enc3'_aligned : forall s ce t ce', enc3' s ce = Ok (t, ce') -> padding t = 0)
+      (encA'_aligned : forall a s ce t ce', encA' a s ce = Ok (t, ce') -> padding t = 0)
       (enc'_sz_eq : forall s a ce t1 ce1 t2 ce2,
-          enc2' s ce = Some (t1, ce1) ->
-          encA' a s ce = Some (t2, ce2) ->
+          enc2' s ce = Ok (t1, ce1) ->
+          encA' a s ce = Ok (t2, ce2) ->
           bin_measure t1 = bin_measure t2)
       (f_OK : forall (b : ByteString)
                 idx (v1 : Vector.t Core.char idx)
@@ -724,16 +727,16 @@ Lemma CorrectAlignedEncoderForChecksum
       (enc2' : EncodeM S ByteString)
       (enc2_OK : EncodeMEquivAlignedEncodeM enc2' encode_C')
       (encode_C_OK : forall a, EncodeMEquivAlignedEncodeM
-                            ((fun a _ ce => Some (format_checksum _ _ _ _ a, ce)) a) (encode_C a))
-      (enc2'_aligned : forall s ce t ce', enc2' s ce = Some (t, ce') -> padding t = 0)
+                            ((fun a _ ce => Ok (format_checksum _ _ _ _ a, ce)) a) (encode_C a))
+      (enc2'_aligned : forall s ce t ce', enc2' s ce = Ok (t, ce') -> padding t = 0)
       n1
       (format_B_sz_eq : forall s ce t ce',
           format_B s ce ∋ (t, ce') -> bin_measure t = n1)
       (checksum_sz_OK : checksum_sz mod 8 = 0)
-      (checksum_sz_OK' : forall s ce t ce', enc2' s ce = Some (t, ce') ->
+      (checksum_sz_OK' : forall s ce t ce', enc2' s ce = Ok (t, ce') ->
                                        checksum_sz = bin_measure t)
       (checksum_OK : forall s ce b' ce',
-          enc2' s ce = Some (b', ce') ->
+          enc2' s ce = Ok (b', ce') ->
           forall b1 b3 ext,
             (exists s ce ce', format_B s ce ∋ (b1, ce')) ->
             (exists s ce ce', format_A s ce ∋ (b3, ce')) ->
@@ -743,7 +746,7 @@ Lemma CorrectAlignedEncoderForChecksum
               (bin_measure (mappend b1 (mappend b2 b3)))
               (mappend (mappend b1 (mappend b2 b3)) ext))
       (checksum_OK' : forall s ce,
-          enc2' s ce = None ->
+          is_error (enc2' s ce) ->
           forall b1 b2 b3 ext,
             ~checksum_valid
               (bin_measure (mappend b1 (mappend b2 b3)))
@@ -759,7 +762,7 @@ Proof.
   exists (fun s ce =>
        `(p, _) <- sequence_Encode enc1' (sequence_Encode enc2' enc3') s ce;
        (fun a => (sequence_Encode enc1' (sequence_Encode
-                                        ((fun a _ ce => Some (format_checksum _ _ _ _ a, ce)) a)
+                                        ((fun a _ ce => Ok (format_checksum _ _ _ _ a, ce)) a)
                                         enc3'))) ((f_bit_aligned_free f) p) s ce).
   split; [| split]; intros.
   - unfold composeChecksum, sequence_Encode. split; intros; simpl in *.
@@ -784,9 +787,11 @@ Proof.
       destruct enc1' eqn:Henc1; destruct_conjs; simpl in *; destruct_unit.
       destruct enc2' eqn:Henc2; destruct_conjs; simpl in *; destruct_unit.
       destruct enc3' eqn:Henc3; destruct_conjs; simpl in *; destruct_unit.
-      discriminate.
-      edestruct HA1. intuition eauto. intuition eauto.
-      edestruct HB1. intuition eauto.
+      tauto.
+      edestruct HA1.
+      * eapply H2; eauto. rewrite Henc3; auto.
+      * eapply checksum_OK'; eauto. rewrite Henc2; auto. 
+      * edestruct HB1. eapply H2; eauto. rewrite Henc1; auto.
   - destruct sequence_Encode; [| discriminate]; destruct_conjs; simpl in *.
     eapply sequence_Encoding_padding_0; try apply H; eauto.
     intros.
@@ -795,7 +800,7 @@ Proof.
     unfold format_checksum. rewrite encode_word'_padding. eauto.
   - eapply EncodeMEquivAlignedEncodeM_morphism; cycle 1.
     apply EncodeMEquivAlignedEncodeMForChecksum
-      with (encA' := (fun a _ ce => Some (format_checksum _ _ _ _ a, ce))); eauto.
+      with (encA' := (fun a _ ce => Ok (format_checksum _ _ _ _ a, ce))); eauto.
     + intros. injections.
       unfold format_checksum. rewrite encode_word'_padding. eauto.
     + intros. injections. unfold format_checksum.
@@ -825,7 +830,7 @@ Proof.
       set (fun sz => encode_C' sz >> encode_A sz)%AlignedEncodeM as enc'.
       set (fun sz => encode_B sz >> enc' sz)%AlignedEncodeM as enc.
       match goal with
-      | |- context[Ifopt ?b _ _ _ _ as _ Then _ Else _] => replace b with (enc sz) by reflexivity
+      | |- context[HBind ?b _ _ _ _ as _ With _] => replace b with (enc sz) by reflexivity
       end.
       destruct enc eqn:?; eauto.
       destruct_conjs. simpl. unfold AppendAlignedEncodeM.
@@ -844,7 +849,7 @@ Proof.
       subst. simpl in *. destruct H. simpl in *.
 
       assert (encode_B (idx + (nB + (nC + nC3))) (t1 ++ vB ++ vC3) idx w c =
-              Some (t1 ++ vB ++ vC3, idx+nB, ce)). {
+              Ok (t1 ++ vB ++ vC3, idx+nB, ce)). {
         assert (idx + nB + (nC + nC3) = idx + (nB + (nC + nC3))) as L by Lia.lia.
         rewrite Vector_append_assoc with (H:=L). destruct L. simpl.
         epose proof AlignedEncoder_extr as H'. eapply H'; eauto. clear H'.
@@ -894,7 +899,7 @@ Proof.
 
       assert (n3' = nA + nA3) as L by Lia.lia. subst n3'.
       assert (encode_A (idx + (nB + (nC + (nA + nA3)))) t n w c =
-              Some (t, n+nA, c)). {
+              Ok (t, n+nA, c)). {
         rewrite (Vector_append_assoc _ _ _ H3) in H8.
         clear Heqa0. destruct H3. simpl in *.
         subst. apply Vector_append_inj in H8. destruct_conjs.
@@ -924,16 +929,16 @@ Lemma format_word_is_encode_word {T}
       {monoid : Monoid T} {monoidUnit : QueueMonoidOpt monoid bool}
       {n} (enc : EncodeM (word n) T)
   : (forall s env,
-        (forall t env', enc s env = Some (t, env')
+        (forall t env', enc s env = Ok (t, env')
                    -> refine (format_word s env) (ret (t, env')))
-        /\ (enc s env = None ->
+        /\ (is_error(enc s env) ->
            forall benv', ~ computes_to (format_word s env) benv')) ->
-    forall s env, enc s env = Some (encode_word' _ s mempty, addE env n).
+    forall s env, enc s env = Ok (encode_word' _ s mempty, addE env n).
 Proof.
   intros. destruct enc eqn:?; destruct_conjs.
   - apply H in Heqe.
     eapply Return_inv in Heqe; eauto. congruence.
-  - exfalso. eapply H; eauto.
+  - exfalso. eapply H; eauto. rewrite Heqe; constructor.
     computes_to_econstructor; eauto.
 Qed.
 
@@ -955,7 +960,7 @@ Lemma EncodeMEquivAlignedEncodeM_word_const
       {n}
   : forall (w : word (n*8)),
     EncodeMEquivAlignedEncodeM
-      (fun (_ : S) env => Some (encode_word' _ w mempty, addE env (n*8)))
+      (fun (_ : S) env => Ok (encode_word' _ w mempty, addE env (n*8)))
       (encode_word_const w).
 Proof.
   intros.
@@ -1011,8 +1016,8 @@ Proof.
   eapply CorrectAlignedEncoderForChecksum; intros;
     eauto using (EncodeMEquivAlignedEncodeM_word_const (n:=2));
     simpl in H; match goal with
-                | H : Some (?a, _) = Some (?b, _) |- _ => replace b with a in * by congruence
-                | H : Some _ = None |- _ => discriminate H
+                | H : Ok (?a, _) = Ok (?b, _) |- _ => replace b with a in * by congruence
+                | H : Ok _ = None |- _ => discriminate H
                 end.
   - apply encode_word'_padding.
   - rewrite length_encode_word'. reflexivity.

@@ -57,31 +57,30 @@ Section Enum.
 
   Fixpoint word_indexed {n : nat}
            (w : word sz)
-           (t : t (word sz) n) : option (Fin.t n)
-    := match t in Vector.t _ n return option (Fin.t n) with
-       | nil => None
+           (t : t (word sz) n) : Hopefully (Fin.t n)
+    := match t in Vector.t _ n return Hopefully (Fin.t n) with
+       | nil => OtherErrorInfo "Decoding enum error: index too large."
        | cons w' _ t' =>
-         if (weqb w w') then Some (Fin.F1) else
+         if (weqb w w') then Ok (Fin.F1) else
            match word_indexed w t' with
-           | Some f => Some (Fin.FS f)
-           | None => None
+           | Ok f => Ok (Fin.FS f)
+           | Error e => Error e 
            end
        end.
 
   Definition decode_enum (b : B)
              (cd : CacheDecode)
-    : option (Fin.t _ * B * CacheDecode) :=
+    : Hopefully (Fin.t _ * B * CacheDecode) :=
     `(w, b', cd') <- decode_word (sz:=sz) b cd;
-      Ifopt word_indexed w tb as idx Then
-      Some (idx, b', cd')
-      Else None.
+      HBind word_indexed w tb as idx With
+      Ok (idx, b', cd').
 
   Lemma word_indexed_correct :
     forall n (i : Fin.t n) (t : t (word sz) n),
       NoDupVector t
       -> match word_indexed (nth t i) t with
-      | Some w' => i = w'
-      | None => False
+      | Ok w' => i = w'
+      | _ => False
       end.
   Proof.
     clear.
@@ -108,7 +107,7 @@ Section Enum.
 
   Lemma word_indexed_correct':
     forall n (v : Fin.t n) (w : word sz) (t : t (word sz) n),
-      word_indexed w t = Some v -> w = nth t v.
+      word_indexed w t = Ok v -> w = nth t v.
   Proof.
     clear.
     induction v.
@@ -125,7 +124,7 @@ Section Enum.
       discriminate.
       destruct (word_indexed w v) eqn : ? ; try discriminate.
       eapply IHv.
-      rewrite Heqo.
+      rewrite Heqh.
       f_equal.
       eapply Fin.FS_inj.
       congruence.
@@ -145,7 +144,8 @@ Section Enum.
     destruct word_indexed eqn:?; subst; intuition eauto.
     symmetry. eauto using word_indexed_correct'.
 
-    derive_decoder_equiv; rewrite Heqo0; intuition eauto.
+    derive_decoder_equiv;
+      destruct (word_indexed w tb); injections; simpl; eauto; try discriminate.
   Qed.
 End Enum.
 

@@ -53,13 +53,13 @@ Section SumType.
 
   Definition decode_SumType {m}
              (types : Vector.t Type m)
-             (decoders : ilist (B := fun T => B -> CacheDecode -> option (T * B * CacheDecode)) types)
+             (decoders : ilist (B := fun T => B -> CacheDecode -> Hopefully (T * B * CacheDecode)) types)
              (idx : Fin.t m)
              (b : B)
              (cd : CacheDecode)
-    : option (SumType types * B * CacheDecode) :=
+    : Hopefully (SumType types * B * CacheDecode) :=
     `(a, b', cd') <- ith decoders idx b cd;
-      Some (inj_SumType types idx a, b', cd').
+      Ok (inj_SumType types idx a, b', cd').
 
   Lemma tri_proj_eq {A C D} : forall a c d (acd : A * C * D),
       a = fst (fst acd)
@@ -75,7 +75,7 @@ Section SumType.
           (types : Vector.t Type m)
           (formatrs : ilist (B := fun T => T -> CacheFormat ->
                                            Comp (B * CacheFormat)) types)
-          (decoders : ilist (B := fun T => B -> CacheDecode -> option (T * B * CacheDecode)) types)
+          (decoders : ilist (B := fun T => B -> CacheDecode -> Hopefully (T * B * CacheDecode)) types)
           (invariants : forall idx, Vector.nth types idx -> Prop)
           (cache_invariants : forall idx, (CacheDecode -> Prop) -> Prop)
           (formatrs_decoders_correct : forall idx,
@@ -115,8 +115,8 @@ Section SumType.
     { intros.
       destruct (ith decoders idx t env') as [ [ [? ?] ? ] | ] eqn : ? ;
         simpl in *; try discriminate; injections.
-      eapply (proj2 (formatrs_decoders_correct idx (H _))) in Heqo;
-        eauto; destruct Heqo as [? [? ?] ]; destruct_ex; intuition; subst.
+      eapply (proj2 (formatrs_decoders_correct idx (H _))) in Heqh;
+        eauto; destruct Heqh as [? [? ?] ]; destruct_ex; intuition; subst.
       eexists _, _; intuition eauto; unfold id in *; eauto;
         try rewrite index_SumType_inj_inverse; eauto.
       - unfold id; pattern (SumType_index types (inj_SumType types idx n)),
@@ -134,7 +134,7 @@ Section SumType.
           (types : Vector.t Type m)
           (formatrs : ilist (B := fun T => T -> CacheFormat ->
                                            Comp (B * CacheFormat)) types)
-          (decoders : ilist (B := fun T => B -> CacheDecode -> option (T * B * CacheDecode)) types)
+          (decoders : ilist (B := fun T => B -> CacheDecode -> Hopefully (T * B * CacheDecode)) types)
           (invariants : ilist (B := fun T => Ensemble T) types)
           (cache_invariants : Vector.t (Ensemble (CacheDecode -> Prop)) m)
           (formatrs_decoders_correct :

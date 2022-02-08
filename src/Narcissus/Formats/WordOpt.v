@@ -59,17 +59,17 @@ Section Word.
       rewrite (IHn x0) at 1; reflexivity.
   Qed.
 
-  Fixpoint decode_word' (s : nat) (b : T) {struct s} : option (word s * T) :=
+  Fixpoint decode_word' (s : nat) (b : T) {struct s} : Hopefully (word s * T) :=
     match s with
-    | O => Some (WO, b)
+    | O => Ok (WO, b)
     | S s' =>
-      `(c, b') <- dequeue_opt b;
+      `(c, b') <- OptnError (InfoError "Dequeuing" EndOfBuffer) (dequeue_opt b);
       `(w', b') <- decode_word' s' b';
-      Some (SW_word c w', b')
+      Ok (SW_word c w', b')
     end.
 
-  Definition decode_word (b : T) (cd : CacheDecode) : option (word sz * T * CacheDecode) :=
-    Ifopt decode_word' sz b as decoded Then Some (decoded, addD cd sz) Else None.
+  Definition decode_word (b : T) (cd : CacheDecode) : Hopefully (word sz * T * CacheDecode) :=
+    HBind decode_word' sz b as decoded With Ok (decoded, addD cd sz).
 
   Lemma enqueue_opt_format_word :
     forall n w b b',
@@ -107,7 +107,7 @@ Section Word.
     eapply dequeue_head_opt.
   Qed.
 
-  Lemma dequeue_opt_Some' :
+  Lemma dequeue_opt_Ok' :
     forall n w ext,
       dequeue_opt (mappend (encode_word' (S n) w mempty) ext)
       = Some (word_split_hd w, (mappend (encode_word' n (word_split_tl w) mempty) ext)).
@@ -127,7 +127,7 @@ Section Word.
   Lemma decode_encode_word'
     : forall {n} w ext,
       decode_word' n (mappend (encode_word' n w mempty) ext)
-      = Some (w, ext).
+      = Ok (w, ext).
   Proof.
     induction n; simpl; intros; try shatter_word w; simpl in *.
     - rewrite mempty_left; reflexivity.
@@ -141,12 +141,12 @@ Section Word.
           eauto using dequeue_head_opt.
         simpl.
         rewrite mempty_left; auto.
-      + rewrite dequeue_opt_Some'.
-        unfold DecodeBindOpt, BindOpt at 1; unfold If_Opt_Then_Else.
+      + rewrite dequeue_opt_Ok'.
+        unfold OptnError, DecodeBindOpt, BindOpt, hbind at 1.
         assert (decode_word' (S n)
                    (mappend (encode_word' n (word_split_tl x0) mempty)
                               (mappend (enqueue_opt x mempty) ext))
-                = Some (WS x (word_split_tl x0), ext)).
+                = Ok (WS x (word_split_tl x0), ext)).
         { simpl.
           pose proof (IHn (WS x (word_split_tl x0)) ext).
           simpl in H.
@@ -154,12 +154,13 @@ Section Word.
           rewrite <- mappend_assoc in H.
           rewrite H.
           eauto. }
-        unfold BindOpt. rewrite H; simpl; rewrite <- (word_split_SW x0); auto.
+        unfold hbind.
+        rewrite H; simpl; rewrite <- (word_split_SW x0); auto.
   Qed.
 
-  Lemma decode_encode_word'_Some
+  Lemma decode_encode_word'_Ok
     : forall sz bin data ext,
-      decode_word' sz bin = Some (data, ext)
+      decode_word' sz bin = Ok (data, ext)
       -> bin = mappend (encode_word' sz data mempty) ext.
   Proof.
     induction sz0; simpl; intros.
@@ -170,7 +171,7 @@ Section Word.
       destruct (decode_word' sz0 t) as [ [? ?] | ] eqn: ? ;
         simpl in *; try discriminate.
       injections.
-      apply IHsz0 in Heqo0; subst.
+      apply IHsz0 in Heqh; subst.
       eapply dequeue_opt_inj; eauto.
       simpl.
       rewrite <- dequeue_encode_word'_enqueue_opt.
@@ -198,7 +199,7 @@ Section Word.
       destruct (decode_word' sz t)
         as [ [? ?] | ] eqn: ?; simpl in *; try discriminate.
       injections.
-      apply decode_encode_word'_Some in Heqo; subst.
+      apply decode_encode_word'_Ok in Heqh; subst.
       split; eauto using add_correct.
       eexists _, _; repeat split.
       eauto using add_correct.
@@ -222,9 +223,9 @@ Section Word.
 
   Lemma decode_word'_le
     : forall (a : word sz) (b' b1 : T),
-      decode_word' _ b1 = Some (a, b') -> le_B b' b1.
+      decode_word' _ b1 = Ok (a, b') -> le_B b' b1.
   Proof.
-    intros; apply decode_encode_word'_Some in H; subst.
+    intros; apply decode_encode_word'_Ok in H; subst.
     unfold le_B.
     rewrite mappend_measure; lia.
   Qed.
@@ -232,7 +233,7 @@ Section Word.
   Lemma decode_word_le
     : forall (b1 : T) (cd : CacheDecode) (a : word sz)
              (b' : T) (cd' : CacheDecode),
-      decode_word b1 cd = Some (a, b', cd') -> le_B b' b1.
+      decode_word b1 cd = Ok (a, b', cd') -> le_B b' b1.
   Proof.
     unfold decode_word.
     intros; destruct (decode_word' sz b1) as [ [? ?] | ] eqn: ? ;
@@ -243,7 +244,7 @@ Section Word.
 
   Lemma decode_word'_lt
     : forall (a : word (S sz)) (b' b1 : T),
-      decode_word' _ b1 = Some (a, b') -> lt_B b' b1.
+      decode_word' _ b1 = Ok (a, b') -> lt_B b' b1.
   Proof.
     simpl; intros; injections; unfold lt_B.
     destruct (dequeue_opt b1) as [ [? ?] | ] eqn: ? ;
@@ -251,7 +252,7 @@ Section Word.
     apply measure_dequeue_Some in Heqo; subst.
     destruct (decode_word' sz t) as [ [? ?] | ] eqn: ? ;
         subst; simpl in *; try discriminate.
-    eapply decode_word'_le in Heqo0; injections.
+    eapply decode_word'_le in Heqh; injections.
     rewrite Heqo.
     unfold le_B in *.
     pose proof (B_measure_gt_0 b).
@@ -261,10 +262,10 @@ Section Word.
   Lemma decode_word_lt
     : forall (b' : T) (cd : CacheDecode) (a : word (S sz))
              (b1 : T) (cd' : CacheDecode),
-      Ifopt decode_word' _ b' as decoded Then Some (decoded, addD cd (S sz)) Else None = Some (a, b1, cd') -> lt_B b1 b'.
+      HBind decode_word' _ b' as decoded With Ok (decoded, addD cd (S sz))  = Ok (a, b1, cd') -> lt_B b1 b'.
   Proof.
     intros; destruct (decode_word' (S sz) b') as [ [? ?] | ] eqn: ? ;
-    try eapply decode_word'_lt in Heqo;
+    try eapply decode_word'_lt in Heqh;
       simpl in *; try (subst; discriminate).
     injections.
     unfold lt_B in *.
@@ -280,24 +281,24 @@ Section Word.
            {monoid_opt : QueueMonoidOpt monoid bool}
            (sz : nat)
            (b : T)
-    : option (word sz) :=
+    : Hopefully (word sz) :=
     match sz with
-    | 0 => Some WO
+    | 0 => Ok WO
     | S sz' =>
       match dequeue_opt b with
       | Some (c, b') =>
         match monoid_get_word sz' b' with
-        | Some w => Some (SW_word c w)
-        | _ => None
+        | Ok w => Ok (SW_word c w)
+        | Error e => Error e
         end
-      | _ => None
+      | _ => Error (InfoError "Getting a word (monoid_get_word)" EndOfBuffer)
       end
     end.
 
   Definition monoid_dequeue_word
          (sz : nat)
          (b : T)
-  : option (word sz * T) := decode_word' sz b.
+  : Hopefully (word sz * T) := decode_word' sz b.
 
   Lemma monoid_dequeue_word_eq_decode_word' :
     forall (sz : nat)
@@ -310,14 +311,14 @@ Section Word.
   Lemma monoid_dequeue_encode_word'
         (sz' : nat)
     : forall (w : word sz') (ext : T),
-      monoid_dequeue_word sz' (mappend (encode_word' _ w mempty ) ext) = Some (w, ext).
+      monoid_dequeue_word sz' (mappend (encode_word' _ w mempty ) ext) = Ok (w, ext).
   Proof.
     intros; unfold monoid_dequeue_word.
     apply decode_encode_word'.
   Qed.
 
-  Definition decode_unused_word' (s : nat) (b : T) : option (unit * T) :=
-    Ifopt monoid_dequeue_word s b as b' Then Some (tt, snd b') Else None.
+  Definition decode_unused_word' (s : nat) (b : T) : Hopefully (unit * T) :=
+    HBind monoid_dequeue_word s b as b' With Ok (tt, snd b').
 
   Definition decode_unused_word
     : DecodeM (unit * T) T :=
@@ -398,7 +399,7 @@ Lemma monoid_get_encode_word' {T}
       {monoid_opt : QueueMonoidOpt monoid bool}
       (sz : nat)
   : forall (w : word sz) (ext : T),
-    monoid_get_word sz (mappend (encode_word' _ w mempty) ext) = Some w.
+    monoid_get_word sz (mappend (encode_word' _ w mempty) ext) = Ok w.
 Proof.
   induction sz; simpl; intros; try shatter_word w; simpl in *.
     - reflexivity.
@@ -410,7 +411,7 @@ Proof.
         rewrite mempty_left.
         erewrite dequeue_mappend_opt;
           eauto using dequeue_head_opt.
-      + rewrite dequeue_opt_Some'.
+      + rewrite dequeue_opt_Ok'.
           pose proof (IHsz (WS x (word_split_tl x0)) ext).
           simpl in *.
           rewrite enqueue_opt_format_word in H.

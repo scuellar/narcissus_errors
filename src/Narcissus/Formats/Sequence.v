@@ -101,15 +101,15 @@ Proof.
     unfold sequence_Decode', DecodeBindOpt2, BindOpt in H1.
     destruct (decode1 t env') as [ [ [? ?] ? ] | ] eqn : ? ;
       simpl in *; try discriminate.
-    generalize Heqo; intros Heqo'.
-    eapply (proj2 (decode1_pf (proj1 P_inv_pf))) in Heqo; eauto.
+    generalize Heqh; intros Heqh'.
+    eapply (proj2 (decode1_pf (proj1 P_inv_pf))) in Heqh; eauto.
     split_and; destruct_ex; split_and.
     subst.
     destruct (decode2 v0 t0 c) as [ [ [? ?] ? ] | ] eqn : ? ;
       simpl in *; try discriminate; injections.
-    generalize Heqo as Heqo''; intro.
-    eapply (proj2 (decode2_pf _ H5 H7)) in Heqo; eauto.
-    destruct Heqo as [? ?]; destruct_ex; split_and; subst.
+    generalize Heqh as Heqh''; intro.
+    eapply (proj2 (decode2_pf _ H5 H7)) in Heqh; eauto.
+    destruct Heqh as [? ?]; destruct_ex; split_and; subst.
     setoid_rewrite mappend_assoc.
     split; eauto.
     eexists _, _; split; eauto.
@@ -122,14 +122,14 @@ Proof.
     unfold ComposeOpt.compose, Bind2 in H11; computes_to_inv;
       simpl in *; injections; destruct v; destruct v2; simpl in *.
     eapply (proj1 (decode1_pf _)) in H11.
-    rewrite mappend_assoc in Heqo'; rewrite <- H14 in Heqo'.
-    rewrite <- mappend_assoc in Heqo'.
-    rewrite Heqo' in H11; destruct_ex; split_and.
+    rewrite mappend_assoc in Heqh'; rewrite <- H14 in Heqh'.
+    rewrite <- mappend_assoc in Heqh'.
+    rewrite Heqh' in H11; destruct_ex; split_and.
     injections; eauto.
     all: eauto.
     eapply decode2_pf in H11'; split_and; destruct_ex; split_and.
-    rewrite H19 in Heqo''.
-    rewrite Heqo'' in H17.
+    rewrite H19 in Heqh''.
+    rewrite Heqh'' in H17.
     injections; intuition eauto.
     all: eauto.
   }
@@ -226,8 +226,9 @@ Proof.
   all: try unfold flip, pointwise_relation, impl;
     intuition eauto using EquivFormat_reflexive.
   unfold Compose_Decode, sequence_Decode, sequence_Decode'; simpl.
-  destruct (decode1 a a0) as [ [ [? ?] ?] | ]; simpl; eauto.
-  destruct (decode2 v t c)as [ [ [? ?] ?] | ]; simpl; eauto.
+  econstructor.
+  destruct (decode1 t c) as [ [ [? ?] ?] | ]; simpl; eauto.
+  destruct (decode2 v t0 c0)as [ [ [? ?] ?] | ]; simpl; eauto.
 Qed.
 
 Lemma format_sequence_refined_correct
@@ -450,9 +451,9 @@ Proof.
   - apply proj2 in Pair_Decode_OK.
     unfold sequence_Decode', sequence_Decode, DecodeBindOpt2, BindOpt in *.
     destruct (decode1 t env') as [ [ [? ?] ?] | ] eqn: ?; try discriminate; simpl in *.
-    assert (sequence_Decode' decode1 decode2 t env' = Some ((v0, v), t', xenv'))
+    assert (sequence_Decode' decode1 decode2 t env' = Ok ((v0, v), t', xenv'))
       by (unfold sequence_Decode', DecodeBindOpt2, BindOpt; simpl;
-          rewrite Heqo; simpl; rewrite H1; eauto).
+          rewrite Heqh; simpl; rewrite H1; eauto).
     eapply Pair_Decode_OK in H2; eauto.
     intuition eauto.
     clear Pair_Decode_OK.

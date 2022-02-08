@@ -406,7 +406,7 @@ Definition IPChecksum_Valid_check (n : nat) (b : ByteString)
   := weqb (onesComplement (ByteString2ListOfChar n b)) (wones 16).
 
 Definition decode_IPChecksum
-  : ByteString -> CacheDecode -> option (() * ByteString * CacheDecode) :=
+  : ByteString -> CacheDecode -> Hopefully (() * ByteString * CacheDecode) :=
   decode_unused_word (sz := 16).
 
 Lemma ByteString2ListOfChar_Over :
@@ -433,8 +433,8 @@ Definition IPv4_Packet_format_measure (ipv4_b : ByteString)
   : nat :=
   match (`(u, b') <- decode_unused_word' 4 ipv4_b;
            decode_word' 4 b') with
-  | Some n => 32 * wordToNat (fst n)
-  | None => 0
+  | Ok n => 32 * wordToNat (fst n)
+  | Error _ => 0
   end.
 
 Lemma ByteString_pop_eq_push
@@ -605,7 +605,7 @@ Lemma computes_to_compose_proj_decode_word {S}
     -> exists b' ctx',
       computes_to (rest ctx') (b', ctx'')
       /\ forall ext,
-        decode_word' sz (mappend b ext) = Some (f s, mappend b' ext).
+        decode_word' sz (mappend b ext) = Ok (f s, mappend b' ext).
 Proof.
   unfold composeChecksum, compose, Bind2; intros; computes_to_inv; injections.
   eapply EquivFormat_Projection_Format in H.
@@ -626,7 +626,7 @@ Lemma computes_to_compose_proj_decode_nat {S}
     -> exists b' ctx',
       computes_to (rest ctx') (b', ctx'')
       /\ forall ext,
-        decode_word' sz (mappend b ext) = Some (natToWord _ (f s), mappend b' ext).
+        decode_word' sz (mappend b ext) = Ok (natToWord _ (f s), mappend b' ext).
 Proof.
   unfold composeChecksum, compose, Bind2; intros; computes_to_inv; injections.
   eapply EquivFormat_Projection_Format in H.
@@ -644,7 +644,7 @@ Lemma computes_to_proj_decode_nat {S}
            (b : ByteString),
     computes_to ((((format_nat sz ◦ f) s)) ctx) (b, ctx'')
     -> forall ext,
-        decode_word' sz (mappend b ext) = Some (natToWord _ (f s), ext).
+        decode_word' sz (mappend b ext) = Ok (natToWord _ (f s), ext).
 Proof.
   unfold composeChecksum, compose, Bind2; intros; computes_to_inv; injections.
   eapply EquivFormat_Projection_Format in H.
@@ -664,7 +664,7 @@ Lemma computes_to_compose_proj_decode_unused_word {S}
     -> exists b' ctx',
       computes_to (rest ctx') (b', ctx'')
       /\ forall ext,
-        decode_unused_word' sz (mappend b ext) = Some ((), mappend b' ext).
+        decode_unused_word' sz (mappend b ext) = Ok ((), mappend b' ext).
 Proof.
   unfold composeChecksum, compose, Bind2; intros; computes_to_inv; injections.
   eapply EquivFormat_Projection_Format in H.
@@ -685,7 +685,7 @@ Lemma computes_to_compose_decode_word
     -> exists b' ctx',
       computes_to (rest ctx') (b', ctx'')
       /\ forall ext,
-        decode_word' sz (mappend b ext) = Some (w, mappend b' ext).
+        decode_word' sz (mappend b ext) = Ok (w, mappend b' ext).
 Proof.
   unfold composeChecksum, compose, Bind2, WordOpt.format_word; intros; computes_to_inv; injections.
   destruct v0; simpl in *; do 2 eexists;
@@ -704,7 +704,7 @@ Lemma computes_to_compose_decode_unused_word
     -> exists b' ctx',
       computes_to (rest ctx') (b', ctx'')
       /\ forall ext,
-        decode_unused_word' sz (mappend b ext) = Some ((), mappend b' ext).
+        decode_unused_word' sz (mappend b ext) = Ok ((), mappend b' ext).
 Proof.
   unfold composeChecksum, compose, Bind2, WordOpt.format_word; intros; computes_to_inv; injections.
   destruct v0; simpl in *; do 2 eexists;
@@ -829,7 +829,8 @@ Lemma compose_IPChecksum_format_correct
              format2 a ctx' ↝ (b'', ctx'') ->
              predicate a ->
              len_format1 a + len_format2 a + 16 = formatd_A_measure (mappend (mappend b (mappend (format_checksum _ _ _ 16 c) b'')) ext)) ->
-      forall decodeA : B -> CacheDecode -> option (A * B * CacheDecode),
+      forall decodeA : B -> CacheDecode -> Hopefully (A * B * CacheDecode),
+        forall e,
         (cache_inv_Property P P_inv ->
          CorrectDecoder monoid predicate predicate eq (format1 ++ format_unused_word 16 ++ format2)%format decodeA P (format1 ++ format_unused_word 16 ++ format2)%format) ->
         CorrectDecoder monoid predicate predicate eq
@@ -838,12 +839,12 @@ Lemma compose_IPChecksum_format_correct
                           if checksum_Valid_dec (formatd_A_measure bin) bin
                           then
                             decodeA bin env
-                          else None) P
+                          else Error e) P
                        (format1 ThenChecksum IPChecksum_Valid OfSize 16 ThenCarryOn format2).
 Proof.
   intros.
   eapply format_decode_correct_EquivDecoder_Proper with
-      (x := fun bin env => if IPChecksum_Valid_dec (formatd_A_measure bin) bin then decodeA bin env else None).
+      (x := fun bin env => if IPChecksum_Valid_dec (formatd_A_measure bin) bin then decodeA bin env else Error e).
   - unfold flip, pointwise_relation, checksum_Valid_dec; intros.
     destruct (IPChecksum_Valid_dec (formatd_A_measure a));
       unfold IPChecksum_Valid, IPChecksum_Valid_check in *.
@@ -910,15 +911,15 @@ Lemma injection_decode_correct' {S V V' T}
           Equiv env env' ->
           P env' ->
           Equiv (snd t) xenv' ->
-          decode_V (mappend (fst t) t') env' = Some (v, t', xenv') ->
+          decode_V (mappend (fst t) t') env' = Ok (v, t', xenv') ->
           computes_to (view_format v env) t ->
           View_Predicate v
           -> forall v', inj v = Some v' -> computes_to (view'_format v' env) t )
-  : CorrectDecoder monoid Source_Predicate View'_Predicate
+  : forall e, CorrectDecoder monoid Source_Predicate View'_Predicate
                    view'
                    format (Compose_Decode' decode_V (fun s => match inj (fst s) with
-                                                           | Some s' => Some (s', snd s)
-                                                           | None => None
+                                                           | Some s' => Ok (s', snd s)
+                                                           | None => Error e
                                                            end))
                    P view'_format.
 Proof.
@@ -935,9 +936,9 @@ Proof.
   }
   { destruct (decode_V t env') as [ [ [? ?] ?] |] eqn: ? ;
       simpl in *; try discriminate; destruct inj eqn:?; try discriminate; injections.
-    generalize Heqo; intros.
+    generalize Heqh; intros.
     apply proj2 in decode_V_OK;
-      eapply decode_V_OK in Heqo; eauto.
+      eapply decode_V_OK in Heqh; eauto.
     intuition; destruct_ex; split_and; eexists _, _; intuition eauto.
     subst.
     eapply view'_format_OK; eauto.
@@ -967,7 +968,7 @@ Lemma injection_decode_correct {S V V' T}
           Equiv env env' ->
           P env' ->
           Equiv (snd t) xenv' ->
-          decode_V (mappend (fst t) t') env' = Some (v, t', xenv') ->
+          decode_V (mappend (fst t) t') env' = Ok (v, t', xenv') ->
           computes_to (view_format v env) t
           -> View_Predicate v
           -> computes_to (view'_format (inj v) env) t )
@@ -978,6 +979,7 @@ Lemma injection_decode_correct {S V V' T}
 Proof.
   eapply (injection_decode_correct' (fun v => Some (inj v)));
     intuition eauto; injections; intuition eauto.
+  constructor.
 Qed.
 
 (* A (hopefully) more convenient IP_Checksum lemma *)
@@ -1012,7 +1014,7 @@ Lemma compose_IPChecksum_format_correct'
              -> length_ByteString b = len_format2 a)
       -> (forall a, NPeano.modulo (len_format1 a) 8 = 0)
       -> (forall a, NPeano.modulo (len_format2 a) 8 = 0)
-      -> forall decodeA : B -> CacheDecode -> option (A * B * CacheDecode),
+      -> forall decodeA : B -> CacheDecode -> Hopefully (A * B * CacheDecode),
         (cache_inv_Property P P_inv ->
          CorrectDecoder monoid predicate predicate eq (format1 ++ format_unused_word 16 ++ format2)%format decodeA P (format1 ++ format_unused_word 16 ++ format2)%format)
       -> (cache_inv_Property P P_invM ->
@@ -1023,13 +1025,13 @@ Lemma compose_IPChecksum_format_correct'
                                 decode_measure P
                                 format_measure)%format
       -> (Prefix_Format _ (format1 ++ format_unused_word 16 ++ format2) subformat)%format
-      -> CorrectDecoder monoid predicate predicate eq
+      -> forall e, CorrectDecoder monoid predicate predicate eq
                        (format1 ThenChecksum IPChecksum_Valid OfSize 16 ThenCarryOn format2)
                        (fun (bin : B) (env : CacheDecode) =>
                           `(n, _, _) <- decode_measure bin env;
                             if checksum_Valid_dec (n * 8) bin then
                               decodeA bin env
-                            else None) P
+                            else Error e) P
                        (format1 ThenChecksum IPChecksum_Valid OfSize 16 ThenCarryOn format2).
 Proof.
   intros.
@@ -1095,15 +1097,18 @@ Proof.
            reflexivity. }
   all: try unfold flip, pointwise_relation, impl;
     intuition eauto using EquivFormat_reflexive.
-  instantiate (1 := IPChecksum_Valid_dec).
-  unfold Compose_Decode.
+  instantiate (2 := IPChecksum_Valid_dec).
+  unfold Compose_Decode. intros a a0.
   destruct (decode_measure a a0) as [ [ [? ?] ? ] | ]; simpl; eauto.
   unfold flip, pointwise_relation, checksum_Valid_dec; intros.
   destruct (IPChecksum_Valid_dec (n * 8) a);
     unfold IPChecksum_Valid, IPChecksum_Valid_check in *.
-    + rewrite i, (proj2 (weqb_true_iff _ _)); eauto.
+    + rewrite i, (proj2 (weqb_true_iff _ _)); eauto. 
     + destruct (weqb (onesComplement (ByteString2ListOfChar (n * 8) a)) (wones 16)) eqn: ?; eauto.
       apply weqb_sound in Heqb0; congruence.
+
+      Unshelve.
+      constructor.
 Qed.
 
 Lemma InternetChecksum_To_ByteBuffer_Checksum {sz}

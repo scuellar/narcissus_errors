@@ -48,7 +48,7 @@ Section AlignedDelimter.
             format_A a env ∋ tenv' ->
             Projection_Format format_string (constant close) a (snd tenv') ∋ tenv'' ->
             exists tenv3 tenv4 : _ * CacheFormat,
-              projT1 encode_A_OK a env = Some tenv3
+              projT1 encode_A_OK a env = Ok tenv3
               /\ Projection_Format format_string (constant close) a (snd tenv3) ∋ tenv4)
         (encode_A_OK2 :
            forall (a : A) (env : CacheFormat) (tenv' tenv'' : ByteString * CacheFormat),
@@ -59,7 +59,7 @@ Section AlignedDelimter.
                         (constant open) format_string
                         AlignedEncodeString
                         (CorrectAlignedEncoderForFormatString addE_addE_plus addE_0))
-                     a env = Some tenv3
+                     a env = Ok tenv3
               /\ format_with_term format_A close a (snd tenv3) ∋ tenv4)
     : CorrectAlignedEncoder (format_delimiter (A:=A) open close format_A)
                             (AlignedEncodeDelimiter encode_A).
@@ -77,7 +77,7 @@ Section AlignedDelimter.
     s <- AlignedDecodeString (length open);
     if String.eqb open s
     then decode_A_with_term close
-    else ThrowAlignedDecodeM.
+    else fun _ _ _ => OtherErrorInfo ("Delimiter" ++ open ++ " expected but found " ++ s).
 
   Lemma AlignedDecodeDelimiterM {A C : Type}
         (decode_A_with_term : string -> DecodeM (A * _) ByteString)
@@ -98,7 +98,7 @@ Section AlignedDelimter.
     eapply Bind_DecodeMEquivAlignedDecodeM; eauto.
     eapply Bind_DecodeMEquivAlignedDecodeM; eauto.
     eapply AlignedDecodeStringM'.
-    intros. eapply AlignedDecode_ifb; eauto.
+    intros. eapply AlignedDecode_ifb_forall; eauto.
   Qed.
 
   Definition AlignedDecodeWithTermStringSimple {A}
@@ -125,7 +125,7 @@ Section AlignedDelimter.
     intros.
     eapply Bind_DecodeMEquivAlignedDecodeM; eauto.
     intros. eapply AlignedDecodeStringM.
-    intros. eapply AlignedDecode_ifb.
+    intros. eapply AlignedDecode_ifb_forall.
     eapply Return_DecodeMEquivAlignedDecodeM.
   Qed.
 

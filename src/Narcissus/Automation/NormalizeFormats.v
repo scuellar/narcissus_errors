@@ -36,6 +36,17 @@ Require Export Fiat.Narcissus.Common.EquivFormat.
 
 Open Scope format_scope.
 
+(** SC-TODO: Move to Tag file
+
+ **)
+Lemma EquivFormat_label: forall S T C label format format',
+    @EquivFormat S T C format format' ->
+    @EquivFormat S T C (format_label label format) (format_label label format').
+Admitted.
+(** END MOVE
+**)
+
+
 Ltac normalize_step BitStringT :=
   (first
      [ (* Always solve the goal if the first format is an evar *)
@@ -43,6 +54,7 @@ Ltac normalize_step BitStringT :=
          |- EquivFormat ?z ?x =>
          is_evar z; apply EquivFormat_reflexive
        end
+     | eapply EquivFormat_label
      | eapply EquivFormat_trans; [ apply sequence_assoc |  ]
      | eapply EquivFormat_trans; [ apply sequence_mempty with (monoid := BitStringT) |  ]
      | eapply EquivFormat_ComposeIf; intros

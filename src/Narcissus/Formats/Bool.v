@@ -19,8 +19,8 @@ Section Bool.
   Definition format_bool (b : bool) (ctx : CacheFormat) :=
     ret (enqueue_opt b mempty, addE ctx 1).
 
-  Definition decode_bool (b : B) (ctx : CacheDecode) : option (bool * B * CacheDecode) :=
-    Ifopt dequeue_opt b as decoded Then Some (decoded, addD ctx 1) Else None.
+  Definition decode_bool (b : B) (ctx : CacheDecode) : Hopefully (bool * B * CacheDecode) :=
+    Ifopt dequeue_opt b as decoded Then Ok (decoded, addD ctx 1) Else Error (InfoError "Dequeuing" EndOfBuffer).
 
   Theorem bool_decode_correct
           {P : CacheDecode -> Prop}
@@ -39,7 +39,7 @@ Section Bool.
     rewrite <- (natToWord_wordToNat v).
     destruct (wordToNat v) eqn:?; reflexivity.
 
-    unfold decode_word, decode_word'; derive_decoder_equiv.
+    unfold decode_word, decode_word'; derive_decoder_equiv. 
   Qed.
 
 End Bool.

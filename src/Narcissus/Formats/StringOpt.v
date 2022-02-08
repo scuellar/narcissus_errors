@@ -32,12 +32,12 @@ Section String.
                           (mappend b1 b2, env2)
     end.
 
-  Fixpoint decode_string (s : nat) (b : B) (cd : CacheDecode) : option (string * B * CacheDecode) :=
+  Fixpoint decode_string (s : nat) (b : B) (cd : CacheDecode) : Hopefully (string * B * CacheDecode) :=
     match s with
-    | O => Some (EmptyString, b, cd)
+    | O => Ok (EmptyString, b, cd)
     | S s' => `(x, b1, e1) <- decode_ascii b cd;
               `(xs, b2, e2) <- decode_string s' b1 e1;
-              Some (String x xs, b2, e2)
+              Ok (String x xs, b2, e2)
     end.
 
   Local Opaque format_ascii.
@@ -87,9 +87,9 @@ Section String.
           simpl in *; try discriminate.
         destruct (decode_string sz b c) as [ [ [? ?] ?] | ] eqn: ? ;
           simpl in *; try discriminate; injections.
-        eapply (proj2 (Ascii_decode_correct P_OK)) in Heqo; eauto;
-          destruct Heqo as [? [? ?] ]; destruct_ex; intuition; subst;
-            eapply IHsz in Heqo0; eauto; destruct Heqo0 as [? [? ?] ];
+        eapply (proj2 (Ascii_decode_correct P_OK)) in Heqh; eauto;
+          destruct Heqh as [? [? ?] ]; destruct_ex; intuition; subst;
+            eapply IHsz in Heqh0; eauto; destruct Heqh0 as [? [? ?] ];
               destruct_ex; intuition; subst.
         unfold id in *; simpl.
         eexists _, _; simpl; intuition eauto.
@@ -103,16 +103,16 @@ Section String.
   Definition decode_string_with_term_char
            (term_char : Ascii.ascii)
            (b : B) (cd : CacheDecode)
-    : option (string * B * CacheDecode).
+    : Hopefully (string * B * CacheDecode).
     refine (Fix well_founded_lt_b
-           (fun _ => CacheDecode -> option (string * B * CacheDecode))
+           (fun _ => CacheDecode -> Hopefully (string * B * CacheDecode))
       (fun b rec cd =>
          (`(a, b1, e1) <- Decode_w_Measure_lt decode_ascii b cd _;
       If ascii_dec a term_char Then
-        Some (EmptyString, proj1_sig b1, e1)
+        Ok (EmptyString, proj1_sig b1, e1)
       Else
       (`(xs, b2, e2) <- rec _ (proj2_sig b1) e1;
-      Some (String a xs, b2, e2)))) b cd).
+      Ok (String a xs, b2, e2)))) b cd).
     exact ascii_decode_lt.
   Defined.
 
@@ -207,12 +207,12 @@ Section String.
       apply DecodeBindOpt2_inv in H2;
         destruct H2 as [? [? [? [? ?] ] ] ]; injections; subst.
       destruct (decode_ascii x env') as [ [ [? ?] ?] | ] eqn: ? .
-      - destruct (Decode_w_Measure_lt_eq _ _ _ ascii_decode_lt Heqo).
+      - destruct (Decode_w_Measure_lt_eq _ _ _ ascii_decode_lt Heqh).
         rewrite H4 in H2; injections.
         destruct (ascii_dec x0 term_char) eqn: ?; simpl in H3.
         + injections.
-          eapply (proj2 (Ascii_decode_correct P_OK)) in Heqo; eauto;
-            destruct Heqo as [? [? ?] ]; destruct_ex; intuition; subst.
+          eapply (proj2 (Ascii_decode_correct P_OK)) in Heqh; eauto;
+            destruct Heqh as [? [? ?] ]; destruct_ex; intuition; subst.
           simpl.
           eexists _, _; intuition.
           computes_to_econstructor; eauto.
@@ -220,8 +220,8 @@ Section String.
           simpl; rewrite mempty_right; eauto.
           destruct s1; simpl in *; discriminate.
           eauto.
-        + eapply (proj2 (Ascii_decode_correct P_OK)) in Heqo; eauto;
-            destruct Heqo as [? [? ?] ]; destruct_ex.
+        + eapply (proj2 (Ascii_decode_correct P_OK)) in Heqh; eauto;
+            destruct Heqh as [? [? ?] ]; destruct_ex.
           symmetry in H3; apply DecodeBindOpt2_inv in H3;
             destruct H3 as [? [? [? [? ?] ] ] ]; injections; subst.
           eapply H in H3; intuition.
@@ -234,8 +234,8 @@ Section String.
           unfold id in *; destruct s1; simpl in *; injections; intros; congruence.
           simpl; eauto.
           simpl; eauto.
-      - eapply Decode_w_Measure_lt_eq' in Heqo; rewrite Heqo in H2;
-          discriminate.
+      - eapply isError, Decode_w_Measure_lt_eq' in Heqh.
+        rewrite H2 in Heqh; inversion Heqh.
       - intros; repeat (apply functional_extensionality; intros; f_equal).
         rewrite H3; reflexivity.
     }
@@ -247,18 +247,18 @@ Section String.
              (cd0 : CacheDecode)
              (a : string) (b' : B)
              (cd' : CacheDecode),
-      decode_string len b3 cd0 = Some (a, b', cd') -> lt_B b' b3.
+      decode_string len b3 cd0 = Ok (a, b', cd') -> lt_B b' b3.
   Proof.
     induction len; simpl; intros; try lia.
     destruct (decode_ascii b3 cd0) as [ [ [? ?] ?] | ] eqn: ? ;
       simpl in *; try discriminate.
-    eapply ascii_decode_lt in Heqo.
+    eapply ascii_decode_lt in Heqh.
     destruct (decode_string len b c) as [ [ [? ?] ?] | ] eqn: ? ;
       simpl in *; try discriminate.
     injections.
     inversion lt_len; subst; simpl in *.
     - injections; eauto.
-    - eapply IHlen in Heqo0; eauto; unfold lt_B in *; lia.
+    - eapply IHlen in Heqh0; eauto; unfold lt_B in *; lia.
   Qed.
 
 End String.

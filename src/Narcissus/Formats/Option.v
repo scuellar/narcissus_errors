@@ -6,7 +6,31 @@ Require Import
         Fiat.Narcissus.Common.WordFacts
         Fiat.Narcissus.BaseFormats.
 
+
 Unset Implicit Arguments.
+
+
+Section Tag.
+Require Import Strings.String. (* For errors*)
+
+(*** TAGS/ LABELS
+     TOD: Move to other file
+ **)
+  Definition format_label {T B C} (label: string): @FormatM T B C -> @FormatM T B C := id.
+  Lemma format_label_equiv: forall S T C label format,
+      @EquivFormat S T C (format_label label format) format.
+  Proof.
+    intros. constructor; simpl; unfold format_label, id; simpl; intros ? **; auto.
+  Qed.
+
+
+(** END OF TAGS/LABELS
+ **)
+
+End Tag.
+
+Opaque format_label.
+
 Section Option.
 
   Context {sz : nat}.
@@ -36,13 +60,13 @@ Section Option.
     (fun (b : T) (env : CacheDecode) =>
        If b' Then
           match decode_Some b env with
-          | Some (a, b, c) => Some ((inl a, b), c)
-          | None => None
+          | Ok (a, b, c) => Ok ((inl a, b), c)
+          | Error e => Error e
           end
           Else
           match decode_None b env with
-          | Some (a, b, c) => Some ((inr a, b), c)
-          | None => None
+          | Ok (a, b, c) => Ok ((inr a, b), c)
+          | Error e => Error e
           end).
 
   Lemma option_format_correct'
@@ -122,11 +146,11 @@ Proof.
     find_if_inside; simpl in *.
     - destruct (decode_Some t env') as [ [ [? ?] ?] | ] eqn : ? ;
         simpl in *; try discriminate; injections; simpl.
-      eapply decode_Some_pf in Heqo; intuition eauto.
+      eapply decode_Some_pf in Heqh; intuition eauto.
       destruct_ex; split_and; eexists _, _; intuition eauto.
     - destruct (decode_None t env') as [ [ [? ?] ?] | ] eqn : ? ;
         simpl in *; try discriminate; injections.
-      eapply decode_None_pf in Heqo; intuition eauto; destruct_ex;
+      eapply decode_None_pf in Heqh; intuition eauto; destruct_ex;
         intuition eauto; subst.
       destruct_ex; split_and; eexists _, _; intuition eauto.
   }
@@ -146,13 +170,13 @@ Definition option_decode
     (fun (b : T) (env : CacheDecode) =>
        If b' Then
           match decode_Some b env with
-          | Some (a, b, c) => Some ((Some a, b), c)
-          | None => None
+          | Ok (a, b, c) => Ok ((Some a, b), c)
+          | Error e => Error e
           end
           Else
           match decode_None b env with
-          | Some (a, b, c) => Some ((None, b), c)
-          | None => None
+          | Ok (a, b, c) => Ok ((None, b), c)
+          | Error e => Error e
           end).
 
 Lemma option_format_correct
@@ -257,9 +281,10 @@ Lemma option_format_correct
       unfold EquivFormat; intros; reflexivity.
     - unfold flip, pointwise_relation; intros; intuition eauto.
       unfold Compose_Decode, option_decode, option_decode'.
+      econstructor.
       destruct b'; simpl.
-      destruct (decode_Some a a0) as [ [ [? ?] ?] | ]; simpl; eauto.
-      destruct (decode_None a a0) as [ [ [? ?] ?] | ]; simpl; eauto.
+      destruct (decode_Some t c) as [ [ [? ?] ?] | ]; simpl; eauto.
+      destruct (decode_None t c) as [ [ [? ?] ?] | ]; simpl; eauto.
     - unfold flip, pointwise_relation; intros; intuition eauto.
       unfold EquivFormat; intros.
       unfold format_option; destruct s; simpl.
