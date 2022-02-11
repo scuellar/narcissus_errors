@@ -73,7 +73,11 @@ Inductive has_error {T}: Hopefully T -> CoderError -> Prop:=
 Inductive Ok_equiv {T}: relation (Hopefully T):=
   Build_Ok_equiv: forall h1 h2,
     h1 = h2 \/ (is_error h1 /\ is_error h2) -> Ok_equiv h1 h2.
-Infix "~=":= Ok_equiv.
+
+(* Yes, I know this overloads the JMeq notation.  I don't think that's
+   a problem, but this can be hidden under a Scope or changed to `~~`
+   *)
+Infix "~=":= Ok_equiv. 
 Instance Ok_equiv_reflexive: forall T, Reflexive (@Ok_equiv T).
 Proof.
   intros ??.  econstructor; intros.
