@@ -2,7 +2,6 @@ Require Import Fiat.Narcissus.Examples.TutorialPrelude.
 
 Set Warnings "-local-declaration".
 Set Nested Proofs Allowed.
-Opaque format_label.
 
 (** Some Hacks*)
 Definition fake_label {T} (_ : string) (x: T):= x.

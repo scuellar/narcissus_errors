@@ -88,4 +88,4 @@ Proof. unfold format_label, id; auto. Qed.
 (* From now on to deal with format_label you must use the lemmas in
 this file. This is important so automation doens't just unfold and
 simplify it away.  *)
-Opaque format_label.
+Global Opaque format_label.

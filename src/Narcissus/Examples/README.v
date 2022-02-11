@@ -114,8 +114,10 @@ Module Sensor0.
   Let invariant (msg: sensor_msg) :=
     True.
 
+  Opaque format_label.
   Let enc_dec : EncoderDecoderPair format invariant.
-  Proof. derive_encoder_decoder_pair. Defined.
+  Proof. derive_encoder_decoder_pair.
+  Defined.
 
   Let encode := encoder_impl enc_dec.
   (* fun (sz : nat) (r : sensor_msg) (v : t Core.char sz) =>
