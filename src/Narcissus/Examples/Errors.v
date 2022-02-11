@@ -71,13 +71,17 @@ Module ErrorSensor.
 
   Let enc_dec : EncoderDecoderPair format invariant.
   Proof. derive_encoder_decoder_pair. Defined. (*Takes a bit longer, needs optimizing. *)
-  (*
-  { enc : CorrectAlignedEncoderFor format;
-    dec : CorrectAlignedDecoderFor predicate format }
- *) 
+  (* `enc_dec` Still depends on the following unproven lemmas:
+      - tag_decode_simple_correct 
+      - Append_EncodeMEquivAlignedEncodeM
+      - AlignedDecodeTag
+
+
+     Use : `Print Assumptions enc_dec.`
+   *)
 
   
-  (* Open Scope pretty. *)
+  Open Scope pretty. (* Comment out to remove pretty printing*)
   
   Let encode := encoder_impl enc_dec.
   Let decode := decoder_impl enc_dec.
