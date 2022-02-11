@@ -45,6 +45,13 @@ Check (Error (LabelError "label1"
 
 
 
+
+
+
+
+
+
+
 Module ErrorSensor.
 
   Let kind :=
@@ -53,7 +60,6 @@ Module ErrorSensor.
   Record sensor_msg :=
     { stationID: word 8; data: (kind * word 14) }.
 
-  
   Let format: FormatM sensor_msg ByteString :=
         "Sensor Message" #
                          ("ID" ## format_word ◦ stationID
@@ -74,7 +80,7 @@ Module ErrorSensor.
  *) 
 
   
-  (* Open Scope pretty. *)
+  Open Scope pretty.
   
   Let encode := encoder_impl enc_dec.
   Let decode := decoder_impl enc_dec.
@@ -83,7 +89,7 @@ Module ErrorSensor.
       stationID := WO~0~0~0~0~0~1~1~1;
       data := (Fin.F1, WO~1~0~1~0~1~0~0~0~0~0~0~0~0~0)
     |} (initialize_Aligned_ByteString n).
-  Compute (my_encode_message 4).
+  Compute (my_encode_message 6).
   
   Definition my_decoded_message :=
     decode _
@@ -101,7 +107,8 @@ Module ErrorSensor.
            ([WO~0~0~0~0~0~1~1~1; WO~0~0~0~0~0~0~0~0; WO~0~0~0~0~0~1~1~1;
              WO~1~1~1~0~0~0~1~0; WO~1~1~1~0~1~0~1~0; WO~0~0~0~0~0~0~0~0]).
   Compute my_bad_decoded_message2.
-  
+
+
   Definition my_bad_decoded_message3 :=
     decode _
            ([WO~0~0~0~0~0~1~1~1; WO~0~0~0~0~0~0~0~0; WO~1~1~1~1~1~1~1~1;
