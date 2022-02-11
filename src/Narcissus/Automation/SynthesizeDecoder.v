@@ -20,6 +20,7 @@ Require Import
         Fiat.Narcissus.BaseFormats
         Fiat.Narcissus.Formats.Empty
         Fiat.Narcissus.Formats.Option
+        Fiat.Narcissus.Formats.Label
         Fiat.Narcissus.Formats.FixListOpt
         Fiat.Narcissus.Formats.Bool
         Fiat.Narcissus.Formats.ByteBuffer
@@ -34,55 +35,6 @@ Require Import
         Fiat.Narcissus.Automation.Decision
         Fiat.Narcissus.Automation.Common
         Fiat.Narcissus.Automation.ExtractData.
-
-(** SC-TODO: Move*)
-Section Tag.
-Require Import Fiat.Narcissus.BinLib.AlignedByteString.
-Require Import Strings.String. (* For errors*)
-  
-Definition encoder_tag {CacheFormat S} (label: string)
-           (encoder: forall n,  (*@AlignedEncodeM c S sz*)
-                      ByteBuffer.t n -> nat -> S -> CacheFormat -> Hopefully (ByteBuffer.t n * nat * CacheFormat)):
-  (*@AlignedEncodeM c S sz*)
-                   forall n, ByteBuffer.t n -> nat -> S -> CacheFormat -> Hopefully (ByteBuffer.t n * nat * CacheFormat):=
-    fun C S n s c => catchError (encoder C S n s c) (LabelError label).
-Definition decoder_tag {BS CD A} (label: string)
-           (decoder: BS ->
-                     CD ->
-                     Hopefully (A * BS * CD)):
-  BS -> CD -> Hopefully (A * BS * CD):= 
-  fun b s  => catchError (decoder b s) (LabelError label).
-Definition aligned_decoder_tag {BS CD A} (label: string)
-           (decoder: BS ->
-                     CD ->
-                     Hopefully (A * BS * CD)):
-  BS -> CD -> Hopefully (A * BS * CD):= 
-  fun b s  => catchError (decoder b s) (LabelError label).
-
-Lemma tag_decode_simple_correct
-  : forall A tag
-           (format_A : A ->
-                       CacheFormat -> Comp (ByteString * CacheFormat))
-           (A_cache_inv : CacheDecode -> Prop),
-  forall
-    (decode_A : ByteString ->
-                CacheDecode ->
-                Hopefully (A * ByteString * CacheDecode))
-    (A_predicate : A -> Prop),
-    CorrectDecoder ByteStringQueueMonoid A_predicate A_predicate eq
-                   format_A decode_A A_cache_inv format_A ->
-    CorrectDecoder ByteStringQueueMonoid A_predicate A_predicate eq
-                   (format_label tag format_A)
-                   (decoder_tag tag decode_A)
-                   A_cache_inv
-                   (format_label tag format_A).
-Proof.
-  unfold format_label, id; simpl; intros.
-Admitted.
-
-End Tag.
-(** End Move *)
-
 
 Ltac shelve_inv :=
   let H' := fresh in

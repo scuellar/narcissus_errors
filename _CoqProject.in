@@ -250,6 +250,7 @@ src/Narcissus/Common/EquivFormat.v
 src/Narcissus/Common/Monoid.v
 src/Narcissus/Common/Notations.v
 src/Narcissus/Common/Sig.v
+src/Narcissus/Common/Errors.v
 src/Narcissus/Common/Specs.v
 src/Narcissus/Common/WordFacts.v
 src/Narcissus/ComplementaryFormats/ComplementaryFormat.v
@@ -299,6 +300,7 @@ src/Narcissus/Formats/IPChecksum.v
 src/Narcissus/Formats/InternetChecksum.v
 src/Narcissus/Formats/NatOpt.v
 src/Narcissus/Formats/Option.v
+src/Narcissus/Formats/Label.v
 src/Narcissus/Formats/Sequence.v
 src/Narcissus/Formats/SteppingListOpt.v
 src/Narcissus/Formats/StringOpt.v

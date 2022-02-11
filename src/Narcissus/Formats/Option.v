@@ -9,28 +9,6 @@ Require Import
 
 Unset Implicit Arguments.
 
-
-Section Tag.
-Require Import Strings.String. (* For errors*)
-
-(*** TAGS/ LABELS
-     TOD: Move to other file
- **)
-  Definition format_label {T B C} (label: string): @FormatM T B C -> @FormatM T B C := id.
-  Lemma format_label_equiv: forall S T C label format,
-      @EquivFormat S T C (format_label label format) format.
-  Proof.
-    intros. constructor; simpl; unfold format_label, id; simpl; intros ? **; auto.
-  Qed.
-
-
-(** END OF TAGS/LABELS
- **)
-
-End Tag.
-
-Opaque format_label.
-
 Section Option.
 
   Context {sz : nat}.

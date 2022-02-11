@@ -7,9 +7,11 @@ Opaque format_label.
 (** Some Hacks*)
 Definition fake_label {T} (_ : string) (x: T):= x.
 Transparent fake_label.
-Arguments fake_label /. (* Tells coq to unfold even when applied to no arguments. *)  
+Arguments fake_label /. (* ^ Tells coq to unfold even when applied to no arguments. *)  
 Infix "#":= format_label (at level 56).
-Infix "##":= fake_label (at level 56).
+Infix "##":= fake_label (at level 56). (* ^ This is to pretend we can
+use labels everywhere, where in reality the sequence rule doens't work
+yet. So `label1 # p1 ++ label2 p2` doesn't work *)
 
 (*Pretty printing ERRORS*)
 Declare Scope pretty.
@@ -30,11 +32,6 @@ Notation "e 'Extra_Info:' info" :=
   (InfoError info e) (at level 25, only printing, left associativity, format
    "'[' e '//' 'Extra_Info:' info ']'"
 ): pretty.
-
-Check (Error (LabelError "label1"
-                         (InfoError "Info about label 2"
-                                    (LabelError "label2"
-                         (InfoError "Info" OtherError))))).
 
 
 
@@ -62,7 +59,7 @@ Module ErrorSensor.
 
   Let format: FormatM sensor_msg ByteString :=
         "Sensor Message" #
-                         ("ID" ## format_word ◦ stationID
+                         ("ID" ## format_word ◦ stationID 
                           ++ format_unused_word 8
                           ++ format_const WO~0~0~0~0~0~1~1~1~1~1~1~0~0~0~1~0
                           ++ "Data"    #
@@ -73,14 +70,14 @@ Module ErrorSensor.
         True.
 
   Let enc_dec : EncoderDecoderPair format invariant.
-  Proof. derive_encoder_decoder_pair. Defined.
+  Proof. derive_encoder_decoder_pair. Defined. (*Takes a bit longer, needs optimizing. *)
   (*
   { enc : CorrectAlignedEncoderFor format;
     dec : CorrectAlignedDecoderFor predicate format }
  *) 
 
   
-  Open Scope pretty.
+  (* Open Scope pretty. *)
   
   Let encode := encoder_impl enc_dec.
   Let decode := decoder_impl enc_dec.
@@ -89,40 +86,58 @@ Module ErrorSensor.
       stationID := WO~0~0~0~0~0~1~1~1;
       data := (Fin.F1, WO~1~0~1~0~1~0~0~0~0~0~0~0~0~0)
     |} (initialize_Aligned_ByteString n).
-  Compute (my_encode_message 6).
+  Compute (my_encode_message 4). (* ^ Errors with <6 *)
+  
   
   Definition my_decoded_message :=
     decode _
            ([WO~0~0~0~0~0~1~1~1; WO~0~0~0~0~0~0~0~0; WO~0~0~0~0~0~1~1~1;
              WO~1~1~1~0~0~0~1~0; WO~0~0~1~0~1~0~1~0; WO~0~0~0~0~0~0~0~0]).
   Compute my_decoded_message.
-  (* Compute (wordToNat WO~0~0~0~0~0~0~0~0~0~0~1~0~1~0~1~0). *)
+
+  (*Length error*)
   Definition my_bad_decoded_message1 :=
     decode _
            ([WO~0~0~0~0~0~1~1~1; WO~0~0~0~0~0~0~0~0; WO~0~0~0~0~0~1~1~1;
              WO~1~1~1~0~0~0~1~0; WO~0~1~1~0~1~0~1~0]).
   Compute my_bad_decoded_message1.
+
+  (*Enum error: the 5th byte should be `00` or `01`*)
   Definition my_bad_decoded_message2 :=
     decode _
            ([WO~0~0~0~0~0~1~1~1; WO~0~0~0~0~0~0~0~0; WO~0~0~0~0~0~1~1~1;
              WO~1~1~1~0~0~0~1~0; WO~1~1~1~0~1~0~1~0; WO~0~0~0~0~0~0~0~0]).
   Compute my_bad_decoded_message2.
 
-
+  
+  (* Error in the ID : The sequence rule is *not* yet implemented. So
+  this example won't show the right error. An empty array should fail
+  and the stack traceback should show the ID. Howevere the ID label is
+  fake (using double tags `##`) and doesn't do anything. Use this
+  example to check when the sequence rule for labels is implemented.
+  *)
   Definition my_bad_decoded_message3 :=
+    decode _
+           ([]).
+  Compute my_bad_decoded_message3.
+  
+
+  (* Wrong constant word: This shows a current *limitation* of the
+     aproach:
+     The error will say that the error is in Data, while the
+     constant is outside the data field. That's because Narcissus
+     pushes binary checks to the end of the parser. So in the current
+     state all binary checks will show a "Data" error. Two ways to
+     improve it:
+     1. Change the way Narcissus pushes binary checks.
+     2. Make the binary checks fail with more infomration (carrying
+     their entire stack backtrace) and have a mechanism to remove the
+     normal backtrace for this cases. *)
+  Definition my_bad_decoded_message4 :=
     decode _
            ([WO~0~0~0~0~0~1~1~1; WO~0~0~0~0~0~0~0~0; WO~1~1~1~1~1~1~1~1;
              WO~1~1~1~0~0~0~1~0; WO~0~0~1~0~1~0~1~0; WO~0~0~0~0~0~0~0~0]).
-  Compute my_bad_decoded_message3.
-
-
-  
-  Definition my_message : sensor_msg := Build_sensor_msg (natToWord _ 7) (Fin.F1, natToWord _ 42).
-  Definition my_message_encoded:= encode _ my_message (initialize_Aligned_ByteString 4).
-  Compute my_message_encoded.
-  Definition my_bad_message_encoded:= encode _ my_message (initialize_Aligned_ByteString 1).
-  Compute my_bad_message_encoded.
-
+  Compute my_bad_decoded_message4.
   
 End ErrorSensor.
 

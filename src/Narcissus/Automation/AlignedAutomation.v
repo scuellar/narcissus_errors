@@ -15,7 +15,7 @@ Require Import
 Require Import Bedrock.Word.
 
 (* For errors
-   SC-TODO: Move to the tright place
+   SC-TODO: Move to the tright place. Perhaps a new file in BinLib?
  *)
 Lemma CorrectAlignedEncoderForFormatLabel
   : forall c S X format' tag,

@@ -18,6 +18,7 @@ Require Import
         Fiat.Narcissus.Common.ComposeOpt
         Fiat.Narcissus.BaseFormats
         Fiat.Narcissus.Formats.Option
+        Fiat.Narcissus.Formats.Label
         Fiat.Narcissus.Formats.Empty
         Fiat.Narcissus.Formats.Sequence
         Fiat.Narcissus.Formats.FixListOpt
@@ -39,12 +40,6 @@ Open Scope format_scope.
 (** SC-TODO: Move to Tag file
 
  **)
-Lemma EquivFormat_label: forall S T C label format format',
-    @EquivFormat S T C format format' ->
-    @EquivFormat S T C (format_label label format) (format_label label format').
-Admitted.
-(** END MOVE
-**)
 
 
 Ltac normalize_step BitStringT :=
